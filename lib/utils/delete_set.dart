@@ -1,13 +1,14 @@
+import 'package:ydart/lib0/update_encoder_v2.dart';
 import 'package:ydart/utils/id.dart';
 import 'package:ydart/utils/transaction.dart';
 
 class DeleteItem {
   int clock;
-  int len;
+  int length;
 
   DeleteItem({
     required this.clock,
-    required this.len,
+    required this.length,
   });
 }
 
@@ -29,4 +30,6 @@ class DeleteSet {
   bool isDeleted(ID id) {
     throw UnimplementedError();
   }
+
+  void write(UpdateEncoderV2 encoder) {}
 }

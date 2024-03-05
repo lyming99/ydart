@@ -5,7 +5,7 @@ class AbstractEncoder {
 
   void writeLength(int length) {}
 
-  void writeAny(Object content) {}
+  void writeAny(Object? content) {}
 
   void writeBuffer(Uint8List content) {}
 

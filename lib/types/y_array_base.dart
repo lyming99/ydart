@@ -1,8 +1,11 @@
+/// 完成1次review
 import 'dart:typed_data';
+import 'dart:math' as math;
 
 import 'package:ydart/structs/content_any.dart';
 import 'package:ydart/structs/content_type.dart';
 import 'package:ydart/types/abstract_type.dart';
+import 'package:ydart/utils/snapshot.dart';
 import 'package:ydart/utils/transaction.dart';
 
 import '../structs/content_binary.dart';
@@ -11,9 +14,103 @@ import '../structs/item.dart';
 import '../utils/id.dart';
 import '../utils/y_doc.dart';
 
+const maxSearchMarkers = 80;
+
+class ArraySearchMarker {
+  static int _timeTick = -1;
+  int timestamp = 0;
+  Item p;
+  int index;
+
+  ArraySearchMarker({
+    required this.p,
+    required this.index,
+  }) {
+    p.marker = true;
+    refreshTimestamp();
+  }
+
+  void update(Item item, int index) {
+    p.marker = false;
+    p = item;
+    p.marker = true;
+    this.index = index;
+    refreshTimestamp();
+  }
+
+  void refreshTimestamp() {
+    timestamp = ++_timeTick;
+  }
+}
+
+class ArraySearchMarkerCollection {
+  final List<ArraySearchMarker> _searchMarkers = [];
+
+  int get length => _searchMarkers.length;
+
+  void clear() {
+    _searchMarkers.clear();
+  }
+
+  ArraySearchMarker markPosition(Item p, int index) {
+    if (length >= maxSearchMarkers) {
+      var marker =
+          _searchMarkers.reduce((a, b) => a.timestamp < b.timestamp ? a : b);
+      marker.update(p, index);
+      return marker;
+    }
+
+    var pm = ArraySearchMarker(p: p, index: index);
+    _searchMarkers.add(pm);
+    return pm;
+  }
+
+  void updateMarkerChanges(int index, int len) {
+    for (int i = _searchMarkers.length - 1; i >= 0; i--) {
+      var m = _searchMarkers[i];
+
+      if (len > 0) {
+        Item? p = m.p;
+        p.marker = false;
+        while (p != null && (p.deleted || !p.countable)) {
+          p = p.left as Item?;
+          if (p != null && !p.deleted && p.countable) {
+            m.index -= p.length;
+          }
+        }
+
+        if (p == null || p.marker) {
+          _searchMarkers.removeAt(i);
+          continue;
+        }
+
+        m.p = p;
+        p.marker = true;
+      }
+
+      // A simple index <= m.Index check would actually suffice.
+      if (index < m.index || (len > 0 && index == m.index)) {
+        m.index = math.max(index, m.index + len);
+      }
+    }
+  }
+}
+
+/// 封装了一些数组通用操作
 class YArrayBase extends AbstractType {
   final ArraySearchMarkerCollection _searchMarkers =
       ArraySearchMarkerCollection();
+
+  void clearSearchMarkers() {
+    _searchMarkers.clear();
+  }
+
+  @override
+  void callObserver(Transaction transaction, Set<String> parentSubs) {
+    if (!transaction.local) {
+      _searchMarkers.clear();
+    }
+  }
 
   /// 通用的 insert
   void insertGenerics(
@@ -103,7 +200,7 @@ class YArrayBase extends AbstractType {
             right: right,
             rightOrigin: right?.id,
             parent: this,
-            content: ContentBinary(content: arr),
+            content: ContentBinary( arr),
           );
           left!.integrate(transaction, 0);
           break;
@@ -116,7 +213,7 @@ class YArrayBase extends AbstractType {
               right: right,
               rightOrigin: right?.id,
               parent: this,
-              content: ContentDoc(doc: d));
+              content: ContentDoc(d));
           left!.integrate(transaction, 0);
           break;
         case AbstractType at:
@@ -137,6 +234,57 @@ class YArrayBase extends AbstractType {
       }
     }
     packJsonContent();
+  }
+
+  void deleteImpl(Transaction transaction, int index, int length) {
+    if (length == 0) {
+      return;
+    }
+
+    int startIndex = index;
+    int startLength = length;
+    var marker = findMarker(index);
+    var n = start;
+
+    if (marker != null) {
+      n = marker.p;
+      index -= marker.index;
+    }
+
+    // Compute the first item to be deleted.
+    for (; n != null && index > 0; n = n.right as Item) {
+      if (!n.deleted && n.countable) {
+        if (index < n.length) {
+          transaction.doc.store.getItemCleanStart(
+              transaction, ID(client: n.id.client, clock: n.id.clock + index));
+        }
+
+        index -= n.length;
+      }
+    }
+
+    // Delete all items until done.
+    while (length > 0 && n != null) {
+      if (!n.deleted) {
+        if (length < n.length) {
+          transaction.doc.store.getItemCleanStart(
+              transaction, ID(client: n.id.client, clock: n.id.clock + length));
+        }
+
+        n.delete(transaction);
+        length -= n.length;
+      }
+
+      n = n.right as Item;
+    }
+
+    if (length > 0) {
+      throw Exception("Array length exceeded");
+    }
+
+    if (_searchMarkers.length > 0) {
+      _searchMarkers.updateMarkerChanges(startIndex, -startLength + length);
+    }
   }
 
   List<Object> internalSlice(int start, int end) {
@@ -168,6 +316,34 @@ class YArrayBase extends AbstractType {
       n = n.right as Item?;
     }
     return cs;
+  }
+
+  void foreEach(Function(Object item, int index) fun) {
+    int index = 0;
+    var n = start;
+    while (n != null) {
+      if (n.countable && !n.deleted) {
+        var c = n.content.getContent();
+        for (var cItem in c) {
+          fun(cItem, index++);
+        }
+      }
+      n = n.right as Item?;
+    }
+  }
+
+  void forEachSnapshot(
+      Function(Object item, int index) fun, Snapshot snapshot) {
+    int index = 0;
+    var n = start;
+    while (n != null) {
+      if (n.countable && n.isVisible(snapshot)) {
+        var c = n.content.getContent();
+        for (var value in c) {
+          fun(value, index++);
+        }
+      }
+    }
   }
 
   ArraySearchMarker? findMarker(int index) {
@@ -221,58 +397,5 @@ class YArrayBase extends AbstractType {
       return marker;
     }
     return _searchMarkers.markPosition(p!, pIndex);
-  }
-}
-
-const maxSearchMarkers = 80;
-
-class ArraySearchMarkerCollection {
-  final List<ArraySearchMarker> _searchMarkers = [];
-
-  int get length => _searchMarkers.length;
-
-  void clear() {
-    _searchMarkers.clear();
-  }
-
-  ArraySearchMarker markPosition(Item p, int index) {
-    if (length >= maxSearchMarkers) {
-      var marker =
-          _searchMarkers.reduce((a, b) => a.timestamp < b.timestamp ? a : b);
-      marker.update(p, index);
-      return marker;
-    } else {
-      var pm = ArraySearchMarker(p: p, index: index);
-      _searchMarkers.add(pm);
-      return pm;
-    }
-  }
-
-  void updateMarkerChanges(int index, int length) {}
-}
-
-class ArraySearchMarker {
-  static int _timeTick = -1;
-  int timestamp = 0;
-  Item p;
-  int index;
-
-  ArraySearchMarker({
-    required this.p,
-    required this.index,
-  }) {
-    timestamp = ++_timeTick;
-  }
-
-  void update(Item item, int index) {
-    p.marker = false;
-    p = item;
-    p.marker = true;
-    this.index = index;
-    timestamp = ++_timeTick;
-  }
-
-  void refreshTimestamp() {
-    timestamp = ++_timeTick;
   }
 }

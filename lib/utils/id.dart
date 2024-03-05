@@ -9,6 +9,10 @@ class ID {
     required this.clock,
   });
 
+  factory ID.create(int client, int clock) {
+    return ID(client: client, clock: clock);
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -24,7 +28,8 @@ class ID {
     encoder.writeVarInt(client);
     encoder.writeVarInt(clock);
   }
-  static ID read(AbstractDecoder decoder){
+
+  static ID read(AbstractDecoder decoder) {
     var client = decoder.readVarInt();
     var clock = decoder.readVarInt();
     return ID(client: client, clock: clock);

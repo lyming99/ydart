@@ -9,9 +9,7 @@ import 'package:ydart/utils/transaction.dart';
 class ContentBinary extends IContentEx {
   Uint8List content;
 
-  ContentBinary({
-    required this.content,
-  });
+  ContentBinary(this.content);
 
   @override
   int get ref => 3;
@@ -29,7 +27,7 @@ class ContentBinary extends IContentEx {
 
   @override
   IContent copy() {
-    return ContentBinary(content: content);
+    return ContentBinary(content);
   }
 
   @override
@@ -58,6 +56,6 @@ class ContentBinary extends IContentEx {
 
   static ContentBinary read(AbstractDecoder decoder) {
     Uint8List content = decoder.readBuffer();
-    return ContentBinary(content: content);
+    return ContentBinary(content);
   }
 }

@@ -5,7 +5,7 @@ import 'package:ydart/utils/struct_store.dart';
 import 'package:ydart/utils/transaction.dart';
 
 class ContentAny extends IContentEx {
-  List<Object> content;
+  List<Object?> content;
 
   ContentAny({
     required this.content,

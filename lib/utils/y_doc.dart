@@ -30,6 +30,8 @@ class YDoc {
 
   get clientId => null;
 
+  bool get gc => false;
+
   String findRootTypeKey(AbstractType abstractType) {
     throw UnimplementedError();
   }
@@ -38,4 +40,8 @@ class YDoc {
       [Object? origin, bool local = true]) {
 
   }
+
+  cloneOptionsWithNewGuid() {}
+
+  void applyUpdateV2(array, {required String transactionOrigin}) {}
 }

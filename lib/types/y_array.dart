@@ -1,3 +1,4 @@
+/// 完成1次review
 import 'package:ydart/types/y_array_base.dart';
 import 'package:ydart/utils/y_event.dart';
 
@@ -6,14 +7,13 @@ import '../utils/encoding.dart';
 import '../utils/transaction.dart';
 import '../utils/y_doc.dart';
 
+const yArrayRefId = 0;
 class YArrayEvent extends YEvent {
   YArrayEvent({
     required super.target,
     required super.transaction,
   });
 }
-
-const yArrayRefId = 0;
 
 class YArray extends YArrayBase {
   /// 记录没有整合的内容
@@ -63,7 +63,7 @@ class YArray extends YArrayBase {
     var doc = this.doc;
     if (doc != null) {
       doc.transact((tr) {
-        delete(tr, index, length);
+        deleteImpl(tr, index, length);
       });
     } else {
       _prelimContent.removeRange(index, index + length);
@@ -92,5 +92,4 @@ class YArray extends YArrayBase {
     }
     return -1;
   }
-
 }

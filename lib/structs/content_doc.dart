@@ -10,9 +10,7 @@ class ContentDoc extends IContentEx {
   YDoc doc;
   YDocOptions docOptions = YDocOptions();
 
-  ContentDoc({
-    required this.doc,
-  });
+  ContentDoc(this.doc);
 
   @override
   int get ref => 9;
@@ -30,7 +28,7 @@ class ContentDoc extends IContentEx {
 
   @override
   IContent copy() {
-    return ContentDoc(doc: doc);
+    return ContentDoc(doc);
   }
 
   @override
@@ -66,6 +64,6 @@ class ContentDoc extends IContentEx {
     var guid = decoder.readString();
     var opts = YDocOptions.read(decoder);
     opts.guid = guid;
-    return ContentDoc(doc: YDoc(options: opts));
+    return ContentDoc(YDoc(options: opts));
   }
 }
