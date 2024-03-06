@@ -487,18 +487,101 @@ class YText extends YArrayBase {
     return ops;
   }
 
-  void insert(int index, String text, [Map<String, Object>? attributes]) {}
+  void insert(int index, String text, [Map<String, Object>? attributes]) {
+    if (text.isEmpty) {
+      return;
+    }
+    var doc = this.doc;
+    if (doc == null) {
+      _pending.add(() => insert(index, text, attributes));
+      return;
+    }
+    doc.transact((tr) {
+      var pos = findPosition(tr, index);
+      attributes ??= Map.from(pos.currentAttributes);
+      insertText(tr, pos, text, attributes);
+    });
+  }
 
-  void insertEmbed(int index, Object embed,
-      [Map<String, Object>? attributes]) {}
+  void insertEmbed(int index, Object embed, [Map<String, Object>? attributes]) {
+    attributes ??= {};
+    var doc = this.doc;
+    if (doc == null) {
+      _pending.add(() => insertEmbed(index, embed, attributes));
+      return;
+    }
+    doc.transact((tr) {
+      var pos = findPosition(str, index);
+      insertText(tr, pos, embed, attributes);
+    });
+  }
 
-  void delete(int index, int length) {}
+  void delete(int index, int length) {
+    if (length == 0) {
+      return;
+    }
+    var doc = this.doc;
+    if (doc == null) {
+      _pending.add(() => delete(index, length));
+      return;
+    }
+    doc.transact((tr) {
+      var pos = findPosition(tr, index);
+      deleteText(tr, pos, length);
+    });
+  }
 
-  void format(int index, int length, Map<String, Object> attributes) {}
+  void format(int index, int length, Map<String, Object> attributes) {
+    if (length == 0) {
+      return;
+    }
+    var doc = this.doc;
+    if (doc == null) {
+      _pending.add(() => format(index, length, attributes));
+      return;
+    }
+    doc.transact((tr) {
+      var pos = findPosition(tr, index);
+      if (pos.right == null) {
+        return;
+      }
+      formatText(tr, pos, length, attributes);
+    });
+  }
 
-  void removeAttribute(String name) {}
+  @override
+  String toString() {
+    var sb = StringBuffer();
+    var n = start;
+    while (n != null) {
+      var content = n.content;
+      if (!n.deleted && n.countable && content is ContentString) {
+        sb.write(content.content);
+      }
+      n = n.right as Item?;
+    }
+    return sb.toString();
+  }
 
-  void setAttribute(String name, Object value) {}
+  void removeAttribute(String name) {
+    var doc = this.doc;
+    if (doc == null) {
+      _pending.add(() => removeAttribute(name));
+      return;
+    }
+    doc.transact((tr) => typeMapDelete(tr, name));
+  }
+
+  void setAttribute(String name, Object value) {
+    var doc = this.doc;
+    if (doc == null) {
+      _pending.add(() => setAttribute(name, value));
+      return;
+    }
+    doc.transact((tr) {
+      typeMapSet(tr, name, value);
+    });
+  }
 
   Object? getAttribute(String name) {
     return tryTypeMapGet(name);
@@ -511,16 +594,16 @@ class YText extends YArrayBase {
   @override
   void integrate(YDoc? doc, Item item) {
     super.integrate(doc, item);
+    for (var c in _pending) {
+      c.call();
+    }
+    _pending.clear();
   }
 
   @override
   void callObserver(Transaction transaction, Set<String> parentSubs) {
     super.callObserver(transaction, parentSubs);
-  }
 
-  @override
-  String toString() {
-    return super.toString();
   }
 
   static void updateCurrentAttributes(
