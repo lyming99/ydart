@@ -24,6 +24,12 @@ class YTextChangeAttributes {
   YTextChangeType? type;
   int? user;
   YTextChangeType? state;
+
+  YTextChangeAttributes({
+    this.type,
+    this.user,
+    this.state,
+  });
 }
 
 class YTextEvent extends YEvent {
@@ -211,6 +217,16 @@ class ItemTextListPosition {
     required this.currentAttributes,
   });
 
+  factory ItemTextListPosition.create(Item? left, Item? right, int index,
+      Map<String, Object> currentAttributes) {
+    return ItemTextListPosition(
+      left: left,
+      right: right,
+      index: index,
+      currentAttributes: currentAttributes,
+    );
+  }
+
   void forward() {
     var right = this.right;
     if (right == null) {
@@ -344,15 +360,131 @@ class YText extends YArrayBase {
     }
   }
 
-  void applyDelta(List<Delta> delta, [bool sanitize = true]) {}
+  void applyDelta(List<Delta> delta, [bool sanitize = true]) {
+    var doc = this.doc;
+    if (doc == null) {
+      _pending.add(() => applyDelta(delta, sanitize));
+      return;
+    }
+    doc.transact((tr) {
+      var curPos = ItemTextListPosition.create(null, start, 0, {});
+      for (int i = 0; i < delta.length; i++) {
+        var op = delta[i];
+        if (op.insert != null) {
+          var insertStr = op.insert as String;
+          var ins = (!sanitize &&
+                  i == delta.length - 1 &&
+                  curPos.right == null &&
+                  insertStr.endsWith("\n"))
+              ? insertStr.substring(0, insertStr.length - 1)
+              : op.insert;
+          if (ins is! String || ins.isNotEmpty) {
+            insertText(tr, curPos, ins, op.attributes ?? {});
+          }
+        } else if (op.retain != null) {
+          formatText(tr, curPos, op.retain, op.attributes ?? {});
+        } else if (op.delete != null) {
+          deleteText(tr, curPos, op.delete);
+        }
+      }
+    });
+  }
 
   List<Delta> toDelta({
     Snapshot? snapshot,
     Snapshot? prevSnapshot,
-    Function(YTextChangeType type, ID id, YTextChangeAttributes attrs)?
-        computeYChange,
+    YTextChangeAttributes Function(YTextChangeType type, ID id)? computeYChange,
   }) {
-    return [];
+    var ops = <Delta>[];
+    var currentAttributes = <String, Object>{};
+    var doc = this.doc;
+    var str = "";
+
+    void packStr() {
+      if (str.isNotEmpty) {
+        // Pack str with attributes to ops.
+        var attributes = <String, Object>{};
+        var addAttributes = false;
+
+        for (var kvp in currentAttributes.entries) {
+          addAttributes = true;
+          attributes[kvp.key] = kvp.value;
+        }
+
+        var op = Delta(insert: str);
+        if (addAttributes) {
+          op.attributes = attributes;
+        }
+        ops.add(op);
+        str = "";
+      }
+    }
+
+    doc?.transact((tr) {
+      if (snapshot != null) {
+        Transaction.splitSnapshotAffectedStructs(tr, snapshot);
+      }
+
+      if (prevSnapshot != null) {
+        Transaction.splitSnapshotAffectedStructs(tr, prevSnapshot);
+      }
+      var n = start;
+      while (n != null) {
+        bool isSnapshotVisible = snapshot != null && n.isVisible(snapshot);
+        bool isPrevSnapshotVisible =
+            prevSnapshot != null && n.isVisible(prevSnapshot);
+        if (isSnapshotVisible || isPrevSnapshotVisible) {
+          var content = n.content;
+          if (content is ContentString) {
+            var cur = currentAttributes[changeKey] as YTextChangeAttributes?;
+            if (isSnapshotVisible) {
+              if (cur == null ||
+                  cur.user != n.id.client ||
+                  cur.state != YTextChangeType.removed) {
+                packStr();
+                currentAttributes[changeKey] = computeYChange != null
+                    ? computeYChange(YTextChangeType.removed, n.id)
+                    : YTextChangeAttributes(
+                        type: YTextChangeType.removed,
+                      );
+              }
+            } else if (isPrevSnapshotVisible) {
+              if (cur == null ||
+                  cur.user != n.id.client ||
+                  cur.state != YTextChangeType.added) {
+                packStr();
+                currentAttributes[changeKey] = computeYChange != null
+                    ? computeYChange(YTextChangeType.added, n.id)
+                    : YTextChangeAttributes(type: YTextChangeType.added);
+              }
+            } else if (cur != null) {
+              packStr();
+              currentAttributes.remove(changeKey);
+            }
+            str += content.content;
+          }
+          if (content is ContentEmbed) {
+            packStr();
+            var op = Delta(insert: content.embed);
+            if (currentAttributes.isNotEmpty) {
+              op.attributes = Map.from(currentAttributes);
+            }
+            ops.add(op);
+          }
+          if (content is ContentFormat) {
+            if (isSnapshotVisible) {
+              packStr();
+              updateCurrentAttributes(currentAttributes, content);
+            }
+          }
+        }
+
+        n = n.right as Item?;
+      }
+      packStr();
+    }, "splitSnapshotAffectedStructs");
+
+    return ops;
   }
 
   void insert(int index, String text, [Map<String, Object>? attributes]) {}
