@@ -11,7 +11,7 @@ class AbstractEncoder {
 
   void writeString(String guid) {}
 
-  void writeJson(Object embed) {}
+  void writeJson(Object? embed) {}
 
   void writeKey(String key) {}
 

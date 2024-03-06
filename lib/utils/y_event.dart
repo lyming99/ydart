@@ -17,16 +17,16 @@ class ChangesCollection {
 }
 
 class Delta {
-  Object insert;
+  Object? insert;
   int? delete;
   int? retain;
-  Map<String, Object> attributes;
+  Map<String, Object?>? attributes;
 
   Delta({
-    required this.insert,
+    this.insert,
     this.delete,
     this.retain,
-    required this.attributes,
+    this.attributes,
   });
 }
 

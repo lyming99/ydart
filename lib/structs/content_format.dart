@@ -7,7 +7,7 @@ import 'item.dart';
 
 class ContentFormat extends IContentEx {
   String key;
-  Object value;
+  Object? value;
 
   ContentFormat({
     required this.key,
