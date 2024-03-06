@@ -5,13 +5,26 @@ import 'package:ydart/structs/content_format.dart';
 import 'package:ydart/structs/content_string.dart';
 import 'package:ydart/types/abstract_type.dart';
 import 'package:ydart/types/y_array_base.dart';
+import 'package:ydart/utils/id.dart';
+import 'package:ydart/utils/snapshot.dart';
 import 'package:ydart/utils/transaction.dart';
 import 'package:ydart/utils/y_doc.dart';
 import 'package:ydart/utils/y_event.dart';
 
 import '../structs/item.dart';
 
+const yTextRefId = 2;
+const changeKey = "ychange";
+
 enum ChangeType { insert, delete, retain }
+
+enum YTextChangeType { added, removed }
+
+class YTextChangeAttributes {
+  YTextChangeType? type;
+  int? user;
+  YTextChangeType? state;
+}
 
 class YTextEvent extends YEvent {
   Set<String>? subs;
@@ -74,6 +87,7 @@ class YTextEvent extends YEvent {
       delta.add(op);
       action = null;
     }
+
     while (item != null) {
       var content = item.content;
       if (content is ContentEmbed) {
@@ -184,7 +198,199 @@ class YTextEvent extends YEvent {
   }
 }
 
+class ItemTextListPosition {
+  Item? left;
+  Item? right;
+  int index;
+  Map<String, Object> currentAttributes;
+
+  ItemTextListPosition({
+    this.left,
+    this.right,
+    required this.index,
+    required this.currentAttributes,
+  });
+
+  void forward() {
+    var right = this.right;
+    if (right == null) {
+      throw Exception("unexpected");
+    }
+    var rightContent = right.content;
+    if (rightContent is ContentEmbed || rightContent is ContentString) {
+      if (!right.deleted) {
+        index += right.length;
+      }
+    }
+    if (rightContent is ContentFormat) {
+      if (!right.deleted) {
+        YText.updateCurrentAttributes(currentAttributes, rightContent);
+      }
+    }
+    left = right;
+    this.right = right.right as Item?;
+  }
+
+  void findNexPosition(Transaction transaction, int count) {
+    var right = this.right;
+    while (right != null && count > 0) {
+      var rContent = right.content;
+      if (rContent is ContentEmbed || rContent is ContentString) {
+        if (!right.deleted) {
+          if (count < right.length) {
+            transaction.doc.store.getItemCleanStart(
+              transaction,
+              ID(
+                client: right.id.client,
+                clock: right.id.clock + count,
+              ),
+            );
+          }
+          index += right.length;
+          count -= right.length;
+        }
+      } else if (rContent is ContentFormat) {
+        if (!right.deleted) {
+          YText.updateCurrentAttributes(currentAttributes, rContent);
+        }
+      }
+      left = right;
+      this.right = right = right.right as Item?;
+    }
+  }
+
+  void insertNegatedAttributes(Transaction transaction, AbstractType parent,
+      Map<String, Object> negatedAttributes) {
+    bool loopCheck() {
+      var right = this.right;
+      if (right == null) {
+        return false;
+      }
+      if (right.deleted) {
+        return true;
+      }
+      var content = right.content;
+      if (content is ContentFormat) {
+        if (negatedAttributes.containsKey(content.key)) {
+          if (YText.equalAttrs(negatedAttributes[content.key], content.value)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    while (loopCheck()) {
+      if (!this.right!.deleted) {
+        negatedAttributes.remove((this.right!.content as ContentFormat).key);
+      }
+      forward();
+    }
+    var doc = transaction.doc;
+    var ownClientId = doc.clientId;
+    var left = this.left;
+    var right = this.right;
+    for (var kvp in negatedAttributes.entries) {
+      left = Item.create(
+        ID.create(ownClientId, doc.store.getState(ownClientId)),
+        left,
+        left?.lastId,
+        right,
+        right?.id,
+        parent,
+        null,
+        ContentFormat.create(kvp.key, kvp.value),
+        1,
+      );
+      left.integrate(transaction, 0);
+
+      currentAttributes[kvp.key] = kvp.value;
+      YText.updateCurrentAttributes(
+          currentAttributes, left.content as ContentFormat);
+    }
+  }
+
+  void minimizeAttributeChanges(Map<String, Object> attributes) {
+    bool checkForward() {
+      if (right!.deleted) {
+        return true;
+      }
+      var content = right!.content;
+      if (content is! ContentFormat) {
+        return false;
+      }
+      var val = attributes[content.key];
+      if (YText.equalAttrs(val, content.value)) {
+        return true;
+      }
+      return false;
+    }
+
+    while (right != null) {
+      if (!checkForward()) {
+        break;
+      }
+      forward();
+    }
+  }
+}
+
 class YText extends YArrayBase {
+  final List<Function> _pending = [];
+
+  YText(String text) {
+    if (text.isNotEmpty) {
+      _pending.add(() => insert(0, text));
+    }
+  }
+
+  void applyDelta(List<Delta> delta, [bool sanitize = true]) {}
+
+  List<Delta> toDelta({
+    Snapshot? snapshot,
+    Snapshot? prevSnapshot,
+    Function(YTextChangeType type, ID id, YTextChangeAttributes attrs)?
+        computeYChange,
+  }) {
+    return [];
+  }
+
+  void insert(int index, String text, [Map<String, Object>? attributes]) {}
+
+  void insertEmbed(int index, Object embed,
+      [Map<String, Object>? attributes]) {}
+
+  void delete(int index, int length) {}
+
+  void format(int index, int length, Map<String, Object> attributes) {}
+
+  void removeAttribute(String name) {}
+
+  void setAttribute(String name, Object value) {}
+
+  Object? getAttribute(String name) {
+    return tryTypeMapGet(name);
+  }
+
+  Map<String, Object>? getAttributes() {
+    return null;
+  }
+
+  @override
+  void integrate(YDoc? doc, Item item) {
+    super.integrate(doc, item);
+  }
+
+  @override
+  void callObserver(Transaction transaction, Set<String> parentSubs) {
+    super.callObserver(transaction, parentSubs);
+  }
+
+  @override
+  String toString() {
+    return super.toString();
+  }
+
   static void updateCurrentAttributes(
       Map<String, Object?> currentAttributes, ContentFormat content) {}
 

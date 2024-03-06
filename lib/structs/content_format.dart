@@ -14,6 +14,10 @@ class ContentFormat extends IContentEx {
     required this.value,
   });
 
+  factory ContentFormat.create(String key, Object? value) {
+    return ContentFormat(key: key, value: value);
+  }
+
   @override
   int get ref => 6;
 

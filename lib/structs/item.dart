@@ -47,6 +47,29 @@ class Item extends AbstractStruct {
     info = content.isCountable ? InfoEnum.countable : InfoEnum.zero;
   }
 
+  factory Item.create(
+      ID id,
+      AbstractStruct? left,
+      ID? leftOrigin,
+      AbstractStruct? right,
+      ID? rightOrigin,
+      Object? parent,
+      String? parentSub,
+      IContentEx content,
+      int length) {
+    return Item(
+      id: id,
+      content: content,
+      leftOrigin: leftOrigin,
+      left: left,
+      right: right,
+      rightOrigin: rightOrigin,
+      parentSub: parentSub,
+      parent: parent,
+      length: length,
+    );
+  }
+
   bool get marker {
     return false;
   }
