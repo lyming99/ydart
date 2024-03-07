@@ -15,5 +15,10 @@ class StructStore {
     return 0;
   }
 
-  int findIndexSS(List<AbstractStruct>? structs, int index) {}
+  int findIndexSS(List<AbstractStruct>? structs, int index) {
+    return -1;
+  }
+
+  void iterateStructs(Transaction transaction, List<AbstractStruct>? structs,
+      int clock, int length, bool Function(AbstractStruct type) fun) {}
 }

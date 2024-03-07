@@ -1,4 +1,3 @@
-import 'dart:ffi';
 
 import 'package:ydart/structs/content_embed.dart';
 import 'package:ydart/structs/content_format.dart';
@@ -12,6 +11,7 @@ import 'package:ydart/utils/y_doc.dart';
 import 'package:ydart/utils/y_event.dart';
 
 import '../structs/item.dart';
+import '../utils/encoding.dart';
 
 const yTextRefId = 2;
 const changeKey = "ychange";
@@ -208,7 +208,7 @@ class ItemTextListPosition {
   Item? left;
   Item? right;
   int index;
-  Map<String, Object> currentAttributes;
+  Map<String, Object?> currentAttributes;
 
   ItemTextListPosition({
     this.left,
@@ -247,7 +247,7 @@ class ItemTextListPosition {
     this.right = right.right as Item?;
   }
 
-  void findNexPosition(Transaction transaction, int count) {
+  void findNextPosition(Transaction transaction, int count) {
     var right = this.right;
     while (right != null && count > 0) {
       var rContent = right.content;
@@ -276,7 +276,7 @@ class ItemTextListPosition {
   }
 
   void insertNegatedAttributes(Transaction transaction, AbstractType parent,
-      Map<String, Object> negatedAttributes) {
+      Map<String, Object?> negatedAttributes) {
     bool loopCheck() {
       var right = this.right;
       if (right == null) {
@@ -326,7 +326,7 @@ class ItemTextListPosition {
     }
   }
 
-  void minimizeAttributeChanges(Map<String, Object> attributes) {
+  void minimizeAttributeChanges(Map<String, Object?> attributes) {
     bool checkForward() {
       if (right!.deleted) {
         return true;
@@ -379,12 +379,12 @@ class YText extends YArrayBase {
               ? insertStr.substring(0, insertStr.length - 1)
               : op.insert;
           if (ins is! String || ins.isNotEmpty) {
-            insertText(tr, curPos, ins, op.attributes ?? {});
+            insertText(tr, curPos, ins!, op.attributes ?? {});
           }
         } else if (op.retain != null) {
-          formatText(tr, curPos, op.retain, op.attributes ?? {});
+          formatText(tr, curPos, op.retain!, op.attributes ?? {});
         } else if (op.delete != null) {
-          deleteText(tr, curPos, op.delete);
+          deleteText(tr, curPos, op.delete!);
         }
       }
     });
@@ -511,7 +511,7 @@ class YText extends YArrayBase {
       return;
     }
     doc.transact((tr) {
-      var pos = findPosition(str, index);
+      var pos = findPosition(tr, index);
       insertText(tr, pos, embed, attributes);
     });
   }
@@ -588,7 +588,7 @@ class YText extends YArrayBase {
   }
 
   Map<String, Object>? getAttributes() {
-    return null;
+    return typeMapEnumerateValues();
   }
 
   @override
@@ -603,13 +603,311 @@ class YText extends YArrayBase {
   @override
   void callObserver(Transaction transaction, Set<String> parentSubs) {
     super.callObserver(transaction, parentSubs);
+  }
 
+  ItemTextListPosition findPosition(Transaction transaction, int index) {
+    var currentAttributes = <String, Object>{};
+    var marker = findMarker(index);
+
+    if (marker != null) {
+      var pos = ItemTextListPosition.create(
+          marker.p.left as Item?, marker.p, marker.index, currentAttributes);
+      pos.findNextPosition(transaction, index - marker.index);
+      return pos;
+    } else {
+      var pos = ItemTextListPosition.create(null, start, 0, currentAttributes);
+      pos.findNextPosition(transaction, index);
+      return pos;
+    }
+  }
+
+  Map<String, Object?> insertAttributes(Transaction transaction,
+      ItemTextListPosition currPos, Map<String, dynamic> attributes) {
+    var doc = transaction.doc;
+    var ownClientId = doc.clientId;
+    var negatedAttributes = <String, Object?>{};
+
+    for (var kvp in attributes.entries) {
+      var key = kvp.key;
+      var value = kvp.value;
+
+      var currentVal = currPos.currentAttributes[key];
+
+      if (!equalAttrs(currentVal, value)) {
+        negatedAttributes[key] = currentVal;
+
+        currPos.right = Item.create(
+            ID.create(ownClientId, doc.store.getState(ownClientId)),
+            currPos.left,
+            currPos.left?.lastId,
+            currPos.right,
+            currPos.right?.id,
+            this,
+            null,
+            ContentFormat.create(key, value),
+            1);
+        currPos.right?.integrate(transaction, 0);
+        currPos.forward();
+      }
+    }
+
+    return negatedAttributes;
+  }
+
+  void insertText(Transaction transaction, ItemTextListPosition currPos,
+      Object text, Map<String, Object?>? attributes) {
+    attributes = attributes ?? {};
+    for (var kvp in currPos.currentAttributes.entries) {
+      if (!attributes.containsKey(kvp.key)) {
+        attributes[kvp.key] = null;
+      }
+    }
+
+    var doc = transaction.doc;
+    var ownClientId = doc.clientId;
+
+    currPos.minimizeAttributeChanges(attributes);
+    var negatedAttributes = insertAttributes(transaction, currPos, attributes);
+
+    // Insert content.
+    var content = text is String ? ContentString(text) : ContentEmbed(text);
+    super.deepEventHandler;
+    if (searchMarkers.length > 0) {
+      searchMarkers.updateMarkerChanges(currPos.index, content.length);
+    }
+
+    currPos.right = Item.create(
+      ID.create(ownClientId, doc.store.getState(ownClientId)),
+      currPos.left,
+      currPos.left?.lastId,
+      currPos.right,
+      currPos.right?.id,
+      this,
+      null,
+      content,
+    );
+    currPos.right?.integrate(transaction, 0);
+    currPos.forward();
+    currPos.insertNegatedAttributes(transaction, this, negatedAttributes);
+  }
+
+  void formatText(Transaction transaction, ItemTextListPosition curPos,
+      int length, Map<String, Object?> attributes) {
+    var doc = transaction.doc;
+    var ownClientId = doc.clientId;
+
+    curPos.minimizeAttributeChanges(attributes);
+    var negatedAttributes = insertAttributes(transaction, curPos, attributes);
+
+    while (length > 0 && curPos.right != null) {
+      if (!curPos.right!.deleted) {
+        switch (curPos.right!.content.runtimeType) {
+          case ContentFormat:
+            var cf = curPos.right!.content as ContentFormat;
+            if (attributes.containsKey(cf.key)) {
+              var attr = attributes[cf.key];
+              if (equalAttrs(attr, cf.value)) {
+                negatedAttributes.remove(cf.key);
+              } else {
+                negatedAttributes[cf.key] = cf.value;
+              }
+
+              curPos.right!.delete(transaction);
+            }
+            break;
+          case ContentEmbed:
+          case ContentString:
+            if (length < curPos.right!.length) {
+              doc.store.getItemCleanStart(
+                  transaction,
+                  ID.create(curPos.right!.id.client,
+                      curPos.right!.id.clock + length));
+            }
+            length -= curPos.right!.length;
+            break;
+        }
+      }
+
+      curPos.forward();
+    }
+
+    if (length > 0) {
+      var newLines = '\n' * (length - 1);
+      curPos.right = Item.create(
+        ID.create(ownClientId, doc.store.getState(ownClientId)),
+        curPos.left,
+        curPos.left?.lastId,
+        curPos.right,
+        curPos.right?.id,
+        this,
+        null,
+        ContentString(newLines),
+      );
+      curPos.right!.integrate(transaction, 0);
+      curPos.forward();
+    }
+
+    curPos.insertNegatedAttributes(transaction, this, negatedAttributes);
+  }
+
+  int cleanupFormattingGap(Transaction transaction, Item? start, Item? end,
+      Map<String, Object> startAttributes, Map<String, Object> endAttributes) {
+    while (end != null &&
+        end.content is! ContentString &&
+        end.content is! ContentEmbed) {
+      if (!end.deleted && end.content is ContentFormat) {
+        updateCurrentAttributes(endAttributes, end.content as ContentFormat);
+      }
+      end = end.right as Item?;
+    }
+
+    int cleanups = 0;
+    while (start != null && start != end) {
+      if (!start.deleted) {
+        var content = start.content;
+        if (content is ContentFormat) {
+          var cf = content;
+          var endVal =
+              endAttributes.containsKey(cf.key) ? endAttributes[cf.key] : null;
+          var startVal = startAttributes.containsKey(cf.key)
+              ? startAttributes[cf.key]
+              : null;
+
+          if (endVal != cf.value ||
+              !(endVal == cf.value) ||
+              startVal == cf.value ||
+              (startVal == cf.value)) {
+            start.delete(transaction);
+            cleanups++;
+          }
+        }
+      }
+
+      start = start.right as Item?;
+    }
+    return cleanups;
+  }
+
+  void cleanupContextlessFormattingGap(Transaction transaction, Item? item) {
+    while (item != null &&
+        item.right != null &&
+        (item.right!.deleted ||
+            (item.right! as Item).content is! ContentString &&
+                (item.right! as Item).content is! ContentEmbed)) {
+      item = item.right as Item?;
+    }
+
+    var attrs = <Object>{};
+
+    while (item != null &&
+        (item.deleted ||
+            item.content is! ContentString && item.content is! ContentEmbed)) {
+      if (!item.deleted && item.content is ContentFormat) {
+        var cf = item.content as ContentFormat;
+        var key = cf.key;
+        if (attrs.contains(key)) {
+          item.delete(transaction);
+        } else {
+          attrs.add(key);
+        }
+      }
+
+      item = item.left as Item?;
+    }
+  }
+
+  int cleanupFormatting() {
+    int res = 0;
+
+    doc?.transact((transaction) {
+      var start = this.start;
+      var end = this.start;
+      var startAttributes = <String, Object>{};
+      var currentAttributes = <String, Object>{};
+
+      while (end != null) {
+        if (!end.deleted) {
+          switch (end.content.runtimeType) {
+            case ContentFormat:
+              updateCurrentAttributes(
+                  currentAttributes, end.content as ContentFormat);
+              break;
+            case ContentEmbed:
+            case ContentString:
+              res += cleanupFormattingGap(
+                  transaction, start, end, startAttributes, currentAttributes);
+              startAttributes = Map<String, Object>.from(currentAttributes);
+              start = end;
+              break;
+          }
+        }
+
+        end = end.right as Item;
+      }
+    });
+
+    return res;
+  }
+
+  ItemTextListPosition deleteText(
+      Transaction transaction, ItemTextListPosition curPos, int length) {
+    var startLength = length;
+    var startAttrs = Map<String, Object>.from(curPos.currentAttributes);
+    var start = curPos.right;
+
+    while (length > 0 && curPos.right != null) {
+      if (!curPos.right!.deleted) {
+        switch (curPos.right!.content.runtimeType) {
+          case ContentEmbed:
+          case ContentString:
+            if (length < curPos.right!.length) {
+              transaction.doc.store.getItemCleanStart(
+                  transaction,
+                  ID.create(curPos.right!.id.client,
+                      curPos.right!.id.clock + length));
+            }
+            length -= curPos.right!.length;
+            curPos.right!.delete(transaction);
+            break;
+        }
+      }
+
+      curPos.forward();
+    }
+
+    if (start != null) {
+      cleanupFormattingGap(transaction, start, curPos.right, startAttrs,
+          Map<String, Object>.from(curPos.currentAttributes));
+    }
+
+    var parent = (curPos.left ?? curPos.right)!.parent as YText;
+    if (parent.searchMarkers.isNotEmpty) {
+      parent.searchMarkers
+          .updateMarkerChanges(curPos.index, -startLength + length);
+    }
+
+    return curPos;
+  }
+
+  @override
+  void write(AbstractEncoder encoder) {
+    encoder.writeTypeRef(yTextRefId);
+  }
+
+  static YText read(AbstractDecoder decoder) {
+    return YText("");
   }
 
   static void updateCurrentAttributes(
-      Map<String, Object?> currentAttributes, ContentFormat content) {}
+      Map<String, Object?> attributes, ContentFormat format) {
+    if (format.value == null) {
+      attributes.remove(format.key);
+    } else {
+      attributes[format.key] = format.value;
+    }
+  }
 
   static bool equalAttrs(Object? curVal, Object? value) {
-    return false;
+    return curVal == value;
   }
 }

@@ -8,9 +8,7 @@ import 'item.dart';
 class ContentEmbed extends IContentEx {
   Object embed;
 
-  ContentEmbed({
-    required this.embed,
-  });
+  ContentEmbed(this.embed);
 
   @override
   int get ref => 5;
@@ -28,7 +26,7 @@ class ContentEmbed extends IContentEx {
 
   @override
   IContent copy() {
-    return ContentEmbed(embed: embed);
+    return ContentEmbed(embed);
   }
 
   @override
@@ -57,6 +55,6 @@ class ContentEmbed extends IContentEx {
 
   static ContentEmbed read(AbstractDecoder decoder) {
     var content = decoder.readJson();
-    return ContentEmbed(embed: content);
+    return ContentEmbed(content);
   }
 }

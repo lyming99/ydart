@@ -161,4 +161,17 @@ class AbstractType {
         ? v.content.getContent()[v.length - 1]
         : null;
   }
+
+  Map<String, Object> typeMapEnumerateValues() {
+    var result = <String, Object>{};
+    for (var entry in map.entries) {
+      var key = entry.key;
+      var value = entry.value;
+      if (entry.value.deleted) {
+        continue;
+      }
+      map[key] = value;
+    }
+    return result;
+  }
 }

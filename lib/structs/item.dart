@@ -56,7 +56,7 @@ class Item extends AbstractStruct {
       Object? parent,
       String? parentSub,
       IContentEx content,
-      int length) {
+      [int length = 1]) {
     return Item(
       id: id,
       content: content,

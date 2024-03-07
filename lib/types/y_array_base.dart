@@ -44,30 +44,32 @@ class ArraySearchMarker {
 }
 
 class ArraySearchMarkerCollection {
-  final List<ArraySearchMarker> _searchMarkers = [];
+  final List<ArraySearchMarker> searchMarkers = [];
 
-  int get length => _searchMarkers.length;
+  int get length => searchMarkers.length;
+
+  bool get isNotEmpty => searchMarkers.isNotEmpty;
 
   void clear() {
-    _searchMarkers.clear();
+    searchMarkers.clear();
   }
 
   ArraySearchMarker markPosition(Item p, int index) {
     if (length >= maxSearchMarkers) {
       var marker =
-          _searchMarkers.reduce((a, b) => a.timestamp < b.timestamp ? a : b);
+          searchMarkers.reduce((a, b) => a.timestamp < b.timestamp ? a : b);
       marker.update(p, index);
       return marker;
     }
 
     var pm = ArraySearchMarker(p: p, index: index);
-    _searchMarkers.add(pm);
+    searchMarkers.add(pm);
     return pm;
   }
 
   void updateMarkerChanges(int index, int len) {
-    for (int i = _searchMarkers.length - 1; i >= 0; i--) {
-      var m = _searchMarkers[i];
+    for (int i = searchMarkers.length - 1; i >= 0; i--) {
+      var m = searchMarkers[i];
 
       if (len > 0) {
         Item? p = m.p;
@@ -80,7 +82,7 @@ class ArraySearchMarkerCollection {
         }
 
         if (p == null || p.marker) {
-          _searchMarkers.removeAt(i);
+          searchMarkers.removeAt(i);
           continue;
         }
 
@@ -98,17 +100,17 @@ class ArraySearchMarkerCollection {
 
 /// 封装了一些数组通用操作
 class YArrayBase extends AbstractType {
-  final ArraySearchMarkerCollection _searchMarkers =
+  final ArraySearchMarkerCollection searchMarkers =
       ArraySearchMarkerCollection();
 
   void clearSearchMarkers() {
-    _searchMarkers.clear();
+    searchMarkers.clear();
   }
 
   @override
   void callObserver(Transaction transaction, Set<String> parentSubs) {
     if (!transaction.local) {
-      _searchMarkers.clear();
+      searchMarkers.clear();
     }
   }
 
@@ -116,8 +118,8 @@ class YArrayBase extends AbstractType {
   void insertGenerics(
       Transaction transaction, int index, List<Object> content) {
     if (index == 0) {
-      if (_searchMarkers.length > 0) {
-        _searchMarkers.updateMarkerChanges(index, content.length);
+      if (searchMarkers.length > 0) {
+        searchMarkers.updateMarkerChanges(index, content.length);
       }
       insertGenericsAfter(transaction, null, content);
       return;
@@ -151,8 +153,8 @@ class YArrayBase extends AbstractType {
       }
     }
 
-    if (_searchMarkers.length > 0) {
-      _searchMarkers.updateMarkerChanges(startIndex, content.length);
+    if (searchMarkers.length > 0) {
+      searchMarkers.updateMarkerChanges(startIndex, content.length);
     }
 
     insertGenericsAfter(transaction, n, content);
@@ -282,8 +284,8 @@ class YArrayBase extends AbstractType {
       throw Exception("Array length exceeded");
     }
 
-    if (_searchMarkers.length > 0) {
-      _searchMarkers.updateMarkerChanges(startIndex, -startLength + length);
+    if (searchMarkers.length > 0) {
+      searchMarkers.updateMarkerChanges(startIndex, -startLength + length);
     }
   }
 
@@ -348,12 +350,12 @@ class YArrayBase extends AbstractType {
 
   ArraySearchMarker? findMarker(int index) {
     var p = start;
-    if (p == null || index == 0 || _searchMarkers.length == 0) {
+    if (p == null || index == 0 || searchMarkers.length == 0) {
       return null;
     }
-    var marker = _searchMarkers.length == 0
+    var marker = searchMarkers.length == 0
         ? null
-        : _searchMarkers._searchMarkers.reduce((a, b) =>
+        : searchMarkers.searchMarkers.reduce((a, b) =>
             ((index - a.index).abs() < (index - b.index).abs()) ? a : b);
 
     int pIndex = 0;
@@ -396,6 +398,6 @@ class YArrayBase extends AbstractType {
       marker.update(p, pIndex);
       return marker;
     }
-    return _searchMarkers.markPosition(p!, pIndex);
+    return searchMarkers.markPosition(p!, pIndex);
   }
 }
