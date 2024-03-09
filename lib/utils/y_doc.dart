@@ -1,12 +1,28 @@
 import 'dart:math';
 import 'dart:typed_data';
 
-class YDocOptions {
-  static bool DefaultPredicate(Item item) => true;
+import 'package:uuid/uuid.dart';
+import 'package:ydart/lib0/byte_input_stream.dart';
+import 'package:ydart/lib0/byte_output_stream.dart';
+import 'package:ydart/utils/struct_store.dart';
 
+import '../structs/item.dart';
+import '../types/abstract_type.dart';
+import '../types/y_array.dart';
+import '../types/y_map.dart';
+import '../types/y_text.dart';
+import 'delete_set.dart';
+import 'encoding_utils.dart';
+import 'transaction.dart';
+import 'update_decoder.dart';
+import 'update_decoder_v2.dart';
+import 'update_encoder.dart';
+import 'update_encoder_v2.dart';
+
+class YDocOptions {
   bool gc = true;
-  Predicate<Item> gcFilter = DefaultPredicate;
-  String guid = Uuid().v4();
+  bool Function(Item)? gcFilter;
+  String guid = const Uuid().v4();
   Map<String, String>? meta;
   bool autoLoad = false;
 
@@ -38,9 +54,12 @@ class YDocOptions {
 
     var result = YDocOptions();
     result.gc = dict.containsKey('gc') ? dict['gc'] as bool : true;
-    result.guid = dict.containsKey('guid') ? dict['guid'].toString() : Uuid().v4();
-    result.meta = dict.containsKey('meta') ? dict['meta'] as Map<String, String> : null;
-    result.autoLoad = dict.containsKey('autoLoad') ? dict['autoLoad'] as bool : false;
+    result.guid =
+        dict.containsKey('guid') ? dict['guid'].toString() : const Uuid().v4();
+    result.meta =
+        dict.containsKey('meta') ? dict['meta'] as Map<String, String> : null;
+    result.autoLoad =
+        dict.containsKey('autoLoad') ? dict['autoLoad'] as bool : false;
 
     return result;
   }
@@ -49,93 +68,110 @@ class YDocOptions {
 class YDoc {
   final YDocOptions _opts;
   late int clientId;
-  final Map<String, AbstractType> _share = {};
+  Map<String, AbstractType> share;
+  StructStore store = StructStore();
+
+  bool get gc => _opts.gc;
+  final List<Transaction> transactionCleanups;
+  bool shouldLoad;
+  Transaction? transaction;
+  Set<YDoc> subdocs;
+  Item? item;
 
   YDoc(YDocOptions? opts)
       : _opts = opts ?? YDocOptions(),
-        _transactionCleanups = [],
-        clientId = _generateNewClientId(),
-        _share = {},
+        transactionCleanups = [],
+        clientId = generateNewClientId(),
+        share = {},
         store = StructStore(),
         subdocs = {},
-        shouldLoad = _opts.autoLoad;
+        shouldLoad = opts?.autoLoad ?? false;
 
-  static int _generateNewClientId() {
+  String get guid => _opts.guid;
+
+  bool Function(Item) get gcFilter => _opts.gcFilter ?? ((Item item) => true);
+
+  Map<String, String>? get meta => _opts.meta;
+
+  static int generateNewClientId() {
     return Random().nextInt(0x7FFFFFFF);
   }
 
-  void transact(void Function(Transaction) fun, {Object? origin, bool local = true}) {
+  void transact(void Function(Transaction transaction) fun,
+      {Object? origin, bool local = true}) {
     var initialCall = false;
-    if (_transaction == null) {
+    if (transaction == null) {
       initialCall = true;
-      _transaction = Transaction(this, origin, local);
-      _transactionCleanups.add(_transaction!);
-      if (_transactionCleanups.length == 1) {
-        _invokeBeforeAllTransactions();
+      transaction = Transaction(this, origin, local);
+      transactionCleanups.add(transaction!);
+      if (transactionCleanups.length == 1) {
+        invokeBeforeAllTransactions();
       }
-
-      _invokeOnBeforeTransaction(_transaction!);
+      invokeOnBeforeTransaction(transaction!);
     }
 
     try {
-      fun(_transaction!);
+      fun(transaction!);
     } finally {
-      if (initialCall && _transactionCleanups[0] == _transaction) {
-        Transaction.cleanupTransactions(_transactionCleanups, 0);
+      if (initialCall && transactionCleanups[0] == transaction) {
+        Transaction.cleanupTransactions(transactionCleanups, 0);
       }
     }
   }
 
   YArray getArray([String name = '']) {
-    return get<YArray>(name);
+    return get<YArray>(name, () => YArray())!;
   }
 
   YMap getMap([String name = '']) {
-    return get<YMap>(name);
+    return get<YMap>(name, () => YMap())!;
   }
 
   YText getText([String name = '']) {
-    return get<YText>(name);
+    return get<YText>(name, () => YText(""))!;
   }
 
-  T get<T extends AbstractType>(String name) {
-    if (!_share.containsKey(name)) {
-      var type = T();
+  T? get<T extends AbstractType>(String name, T? Function() create) {
+    if (!share.containsKey(name)) {
+      var type = create();
+      if (type == null) {
+        return null;
+      }
       type.integrate(this, null);
-      _share[name] = type;
+      share[name] = type;
     }
+    // T 和share类型不一样的话，就需要创建一个新的进行替换
+    if (T != AbstractType && share[name] is! T) {
+      var t = create();
+      if (t == null) {
+        return null;
+      }
+      t.map = share[name]!.map;
 
-    if (T != AbstractType && !T.isAssignableFrom(_share[name]!.runtimeType)) {
-      if (_share[name]!.runtimeType == AbstractType) {
-        var t = T();
-        t._map = _share[name]!._map;
-
-        for (var kvp in _share[name]!._map.entries) {
-          var n = kvp.value;
-          for (; n != null; n = n.left as Item) {
-            n.parent = t;
-          }
-        }
-
-        t._start = _share[name]!._start;
-        for (var n = t._start; n != null; n = n.right as Item) {
+      for (var kvp in share[name]!.map.entries) {
+        Item? n = kvp.value;
+        for (; n != null; n = n.left as Item?) {
           n.parent = t;
         }
-
-        t.length = _share[name]!.length;
-
-        _share[name] = t;
-        t.integrate(this, null);
-        return t;
-      } else {
-        throw Exception('Type with the name $name has already been defined with a different constructor');
       }
+
+      t.start = share[name]!.start;
+      for (var n = t.start; n != null; n = n.right as Item?) {
+        n.parent = t;
+      }
+
+      t.length = share[name]!.length;
+
+      share[name] = t;
+      t.integrate(this, null);
+      return t;
     }
 
-    return _share[name] as T;
+    return share[name] as T;
   }
 
-  void applyUpdateV2(Stream input, {Object? transactionOrigin, bool local = false}) {
+  void applyUpdateV2FromStream(ByteArrayInputStream input,
+      {Object? transactionOrigin, bool local = false}) {
     transact((tr) {
       var structDecoder = UpdateDecoderV2(input);
       EncodingUtils.readStructs(structDecoder, tr, store);
@@ -143,7 +179,8 @@ class YDoc {
     }, origin: transactionOrigin, local: local);
   }
 
-  void applyUpdateV2(Uint8List update, {Object? transactionOrigin, bool local = false}) {
+  void applyUpdateV2(Uint8List update,
+      {Object? transactionOrigin, bool local = false}) {
     applyUpdateV2(update, transactionOrigin: transactionOrigin, local: local);
   }
 
@@ -151,77 +188,118 @@ class YDoc {
     var targetStateVector = encodedTargetStateVector != null
         ? EncodingUtils.decodeStateVector(encodedTargetStateVector)
         : <int, int>{};
-    var encoder = UpdateEncoderV2();
+    var encoder = UpdateEncoderV2(ByteArrayOutputStream());
     writeStateAsUpdate(encoder, targetStateVector);
-    return encoder.toUint8List();
+    return encoder.toArray();
   }
 
   Uint8List encodeStateVectorV2() {
-    var encoder = DSEncoderV2();
+    var encoder = DSEncoderV2(ByteArrayOutputStream());
     writeStateVector(encoder);
-    return encoder.toUint8List();
+    return encoder.toArray();
   }
 
-  void writeStateAsUpdate(IUpdateEncoder encoder, Map<int, int> targetStateVector) {
+  void writeStateAsUpdate(
+      IUpdateEncoder encoder, Map<int, int> targetStateVector) {
     EncodingUtils.writeClientsStructs(encoder, store, targetStateVector);
-    DeleteSet(store).write(encoder);
+    DeleteSet.createFromStore(store).write(encoder);
   }
 
   void writeStateVector(IDSEncoder encoder) {
     EncodingUtils.writeStateVector(encoder, store.getStateVector());
   }
 
-  void invokeSubdocsChanged(Set<YDoc> loaded, Set<YDoc> added, Set<YDoc> removed) {
-    subdocsChanged?.call(this, (loaded, added, removed));
+  List<Function(Transaction)> beforeObserverCalls = [];
+
+  List<Function(Transaction)> beforeTransaction = [];
+
+  List<Function(Transaction)> afterTransaction = [];
+
+  List<Function(Transaction)> afterTransactionCleanup = [];
+
+  List<Function()> beforeAllTransactions = [];
+
+  List<Function(List<Transaction>)> afterAllTransactions = [];
+
+  List<Function(Uint8List data, Object? origin, Transaction transaction)>
+      updateV2 = [];
+
+  List<Function()> destroyed = [];
+
+  List<Function(Set<YDoc> loaded, Set<YDoc> added, Set<YDoc> removed)>
+      subdocsChanged = [];
+
+  void invokeSubdocsChanged(
+      Set<YDoc> loaded, Set<YDoc> added, Set<YDoc> removed) {
+    for (var element in subdocsChanged) {
+      element.call(loaded, added, removed);
+    }
   }
 
   void invokeOnBeforeObserverCalls(Transaction transaction) {
-    beforeObserverCalls?.call(this, transaction);
+    for (var element in beforeObserverCalls) {
+      element.call(transaction);
+    }
   }
 
   void invokeAfterAllTransactions(List<Transaction> transactions) {
-    afterAllTransactions?.call(this, transactions);
+    for (var element in afterAllTransactions) {
+      element.call(transactions);
+    }
   }
 
   void invokeOnBeforeTransaction(Transaction transaction) {
-    beforeTransaction?.call(this, transaction);
+    for (var element in beforeTransaction) {
+      element.call(transaction);
+    }
   }
 
   void invokeOnAfterTransaction(Transaction transaction) {
-    afterTransaction?.call(this, transaction);
+    for (var element in afterTransaction) {
+      element.call(transaction);
+    }
   }
 
   void invokeOnAfterTransactionCleanup(Transaction transaction) {
-    afterTransactionCleanup?.call(this, transaction);
+    for (var element in afterTransactionCleanup) {
+      element.call(transaction);
+    }
   }
 
   void invokeBeforeAllTransactions() {
-    beforeAllTransactions?.call(this, null);
+    for (var element in beforeAllTransactions) {
+      element.call();
+    }
   }
 
   void invokeDestroyed() {
-    destroyed?.call(this, null);
+    for (var element in destroyed) {
+      element.call();
+    }
   }
 
   void invokeUpdateV2(Transaction transaction) {
     var handler = updateV2;
-    if (handler != null) {
-      var encoder = UpdateEncoderV2();
+    if (handler.isNotEmpty) {
+      var encoder = UpdateEncoderV2(ByteArrayOutputStream());
       var hasContent = transaction.writeUpdateMessageFromTransaction(encoder);
       if (hasContent) {
-        handler(this, (encoder.toUint8List(), transaction.origin, transaction));
+        var array = encoder.toArray();
+        for (var element in handler) {
+          element.call(array, transaction.origin, transaction);
+        }
       }
     }
   }
 
   YDocOptions cloneOptionsWithNewGuid() {
     var newOpts = _opts.clone();
-    newOpts.guid = Uuid().v4();
+    newOpts.guid = const Uuid().v4();
     return newOpts;
   }
 
   String findRootTypeKey(AbstractType type) {
-    for (var kvp in _share.entries) {
+    for (var kvp in share.entries) {
       if (type == kvp.value) {
         return kvp.key;
       }

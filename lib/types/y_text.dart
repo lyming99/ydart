@@ -1,4 +1,3 @@
-
 import 'package:ydart/structs/content_embed.dart';
 import 'package:ydart/structs/content_format.dart';
 import 'package:ydart/structs/content_string.dart';
@@ -7,11 +6,13 @@ import 'package:ydart/types/y_array_base.dart';
 import 'package:ydart/utils/id.dart';
 import 'package:ydart/utils/snapshot.dart';
 import 'package:ydart/utils/transaction.dart';
+import 'package:ydart/utils/update_encoder.dart';
 import 'package:ydart/utils/y_doc.dart';
 import 'package:ydart/utils/y_event.dart';
 
 import '../structs/item.dart';
 import '../utils/encoding.dart';
+import '../utils/update_decoder.dart';
 
 const yTextRefId = 2;
 const changeKey = "ychange";
@@ -38,10 +39,10 @@ class YTextEvent extends YEvent {
   Set<String>? keysChanged;
   bool childListChanged = false;
 
-  YTextEvent({
-    required super.target,
-    required super.transaction,
-  });
+  YTextEvent(
+    super.target,
+    super.transaction,
+  );
 
   List<Delta> get delta {
     var delta = _delta;
@@ -420,7 +421,7 @@ class YText extends YArrayBase {
       }
     }
 
-    doc?.transact((tr) {
+    void update(tr) {
       if (snapshot != null) {
         Transaction.splitSnapshotAffectedStructs(tr, snapshot);
       }
@@ -482,8 +483,9 @@ class YText extends YArrayBase {
         n = n.right as Item?;
       }
       packStr();
-    }, "splitSnapshotAffectedStructs");
+    }
 
+    doc?.transact(update, origin: "splitSnapshotAffectedStructs");
     return ops;
   }
 
@@ -592,7 +594,7 @@ class YText extends YArrayBase {
   }
 
   @override
-  void integrate(YDoc? doc, Item item) {
+  void integrate(YDoc? doc, Item? item) {
     super.integrate(doc, item);
     for (var c in _pending) {
       c.call();
@@ -600,10 +602,6 @@ class YText extends YArrayBase {
     _pending.clear();
   }
 
-  @override
-  void callObserver(Transaction transaction, Set<String> parentSubs) {
-    super.callObserver(transaction, parentSubs);
-  }
 
   ItemTextListPosition findPosition(Transaction transaction, int index) {
     var currentAttributes = <String, Object>{};
@@ -890,7 +888,7 @@ class YText extends YArrayBase {
   }
 
   @override
-  void write(AbstractEncoder encoder) {
+  void write(IUpdateEncoder encoder) {
     encoder.writeTypeRef(yTextRefId);
   }
 

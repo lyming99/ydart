@@ -10,10 +10,12 @@ import 'package:ydart/utils/encoding.dart';
 import 'package:ydart/utils/id.dart';
 import 'package:ydart/utils/snapshot.dart';
 import 'package:ydart/utils/transaction.dart';
+import 'package:ydart/utils/update_encoder.dart';
 import 'package:ydart/utils/y_doc.dart';
 import 'package:ydart/utils/y_event.dart';
 
 import '../structs/item.dart';
+import '../utils/update_decoder.dart';
 
 typedef EventHandler<T> = Function(Object object, T callback);
 
@@ -54,7 +56,7 @@ class AbstractType {
     return null;
   }
 
-  void integrate(YDoc? doc, Item item) {
+  void integrate(YDoc? doc, Item? item) {
     this.doc = doc;
     this.item = item;
   }
@@ -67,7 +69,7 @@ class AbstractType {
     throw UnimplementedError();
   }
 
-  void write(AbstractEncoder encoder) {
+  void write(IUpdateEncoder encoder) {
     throw UnimplementedError();
   }
 
@@ -151,14 +153,14 @@ class AbstractType {
     return null;
   }
 
-  Object typeMapGetSnapshot(String key, Snapshot snapshot) {
-    var v = map[key];
+  Object? typeMapGetSnapshot(String key, Snapshot snapshot) {
+    var item = map[key];
     while (
-        v != null && v.id.clock >= (snapshot.stateVector[v.id.client] ?? -1)) {
-      v = v.left as Item?;
+        item != null && item.id.clock >= (snapshot.stateVector[item.id.client] ?? -1)) {
+      item = item.left as Item?;
     }
-    return v != null && v.isVisible(snapshot)
-        ? v.content.getContent()[v.length - 1]
+    return item != null && item.isVisible(snapshot)
+        ? item.content.getContent()[item.length - 1]
         : null;
   }
 

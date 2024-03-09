@@ -1,8 +1,7 @@
-﻿import 'dart:io';
+﻿import 'package:ydart/lib0/byte_input_stream.dart';
 
-import 'package:ydart/lib0/byte_input_stream.dart';
-
-import 'AbstractStreamDecoder.dart';
+import '../constans.dart';
+import 'abstract_stream_decoder.dart';
 
 class IntDiffOptRleDecoder extends AbstractStreamDecoder<int> {
   int _state = 0;

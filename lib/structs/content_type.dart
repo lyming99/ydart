@@ -4,6 +4,8 @@ import 'package:ydart/types/abstract_type.dart';
 import '../utils/encoding.dart';
 import '../utils/struct_store.dart';
 import '../utils/transaction.dart';
+import '../utils/update_decoder.dart';
+import '../utils/update_encoder.dart';
 import 'item.dart';
 
 class ContentType extends IContentEx {
@@ -26,12 +28,12 @@ class ContentType extends IContentEx {
   }
 
   @override
-  IContent copy() {
+  IContentEx copy() {
     return ContentType(type.internalCopy());
   }
 
   @override
-  IContent splice(int offset) {
+  IContentEx splice(int offset) {
     throw UnimplementedError();
   }
 
@@ -56,11 +58,11 @@ class ContentType extends IContentEx {
   }
 
   @override
-  void write(AbstractEncoder encoder, int offset) {
+  void write(IUpdateEncoder encoder, int offset) {
     type.write(encoder);
   }
 
-  static ContentType read(AbstractDecoder decoder) {
+  static ContentType read(IUpdateDecoder decoder) {
     // TODO: implement read
     throw UnimplementedError();
   }

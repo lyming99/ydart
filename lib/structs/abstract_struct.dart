@@ -3,6 +3,7 @@ import 'package:ydart/utils/struct_store.dart';
 import 'package:ydart/utils/transaction.dart';
 
 import '../utils/id.dart';
+import '../utils/update_encoder.dart';
 
 abstract class AbstractStruct {
   ID id;
@@ -23,5 +24,5 @@ abstract class AbstractStruct {
 
   int? getMissing(Transaction transaction, StructStore store);
 
-  void write(AbstractEncoder encoder, int offset);
+  void write(IUpdateEncoder encoder, int offset);
 }

@@ -1,7 +1,33 @@
 import 'dart:typed_data';
 
+import 'package:ydart/lib0/byte_input_stream.dart';
+import 'package:ydart/types/abstract_type.dart';
+import 'package:ydart/utils/struct_store.dart';
+import 'package:ydart/utils/transaction.dart';
+import 'package:ydart/utils/update_encoder_v2.dart';
+
+import '../lib0/constans.dart';
+import '../structs/abstract_struct.dart';
+import '../structs/base_content.dart';
+import '../structs/content_any.dart';
+import '../structs/content_binary.dart';
+import '../structs/content_deleted.dart';
+import '../structs/content_doc.dart';
+import '../structs/content_embed.dart';
+import '../structs/content_format.dart';
+import '../structs/content_json.dart';
+import '../structs/content_string.dart';
+import '../structs/content_type.dart';
+import '../structs/gc.dart';
+import '../structs/item.dart';
+import 'id.dart';
+import 'update_decoder.dart';
+import 'update_decoder_v2.dart';
+import 'update_encoder.dart';
+import 'y_doc.dart';
+
 class EncodingUtils {
-  static IContent readItemContent(IUpdateDecoder decoder, int info) {
+  static IContentEx readItemContent(IUpdateDecoder decoder, int info) {
     switch (info & Bits.bits5) {
       case 0: // GC
         throw Exception('GC is not ItemContent');
@@ -28,7 +54,8 @@ class EncodingUtils {
     }
   }
 
-  static void readStructs(IUpdateDecoder decoder, Transaction transaction, StructStore store) {
+  static void readStructs(
+      IUpdateDecoder decoder, Transaction transaction, StructStore store) {
     var clientStructRefs = readClientStructRefs(decoder, transaction.doc);
     store.mergeReadStructsIntoPendingReads(clientStructRefs);
     store.resumeStructIntegration(transaction);
@@ -36,21 +63,25 @@ class EncodingUtils {
     store.tryResumePendingDeleteReaders(transaction);
   }
 
-  static void writeStructs(IUpdateEncoder encoder, List<AbstractStruct> structs, int client, int clock) {
+  static void writeStructs(IUpdateEncoder encoder, List<AbstractStruct> structs,
+      int client, int clock) {
     int startNewStructs = StructStore.findIndexSS(structs, clock);
 
-    encoder.restWriter.writeVarUint((structs.length - startNewStructs).toUnsigned(32));
+    encoder.restWriter
+        .writeVarUint((structs.length - startNewStructs).toUnsigned(32));
     encoder.writeClient(client);
     encoder.restWriter.writeVarUint(clock.toUnsigned(32));
 
-    structs[startNewStructs].write(encoder, clock - structs[startNewStructs].id.clock);
+    structs[startNewStructs]
+        .write(encoder, clock - structs[startNewStructs].id.clock);
 
     for (int i = startNewStructs + 1; i < structs.length; i++) {
       structs[i].write(encoder, 0);
     }
   }
 
-  static void writeClientsStructs(IUpdateEncoder encoder, StructStore store, Map<int, int> sm) {
+  static void writeClientsStructs(
+      IUpdateEncoder encoder, StructStore store, Map<int, int> sm) {
     var filteredSm = <int, int>{};
     sm.forEach((client, clock) {
       if (store.getState(client) > clock) {
@@ -66,44 +97,53 @@ class EncodingUtils {
 
     encoder.restWriter.writeVarUint(filteredSm.length.toUnsigned(32));
 
-    var sortedClients = filteredSm.keys.toList()..sort((a, b) => b.compareTo(a));
+    var sortedClients = filteredSm.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
 
     sortedClients.forEach((client) {
-      writeStructs(encoder, store.clients[client], client, filteredSm[client]);
+      writeStructs(
+          encoder, store.clients[client]!, client, filteredSm[client]!);
     });
   }
 
-  static Map<int, List<AbstractStruct>> readClientStructRefs(IUpdateDecoder decoder, YDoc doc) {
+  static Map<int, List<AbstractStruct>> readClientStructRefs(
+      IUpdateDecoder decoder, YDoc doc) {
     var clientRefs = <int, List<AbstractStruct>>{};
     var numOfStateUpdates = decoder.reader.readVarUint();
-
     for (var i = 0; i < numOfStateUpdates; i++) {
       var numberOfStructs = decoder.reader.readVarUint().toInt();
       assert(numberOfStructs >= 0);
-
       var refs = <AbstractStruct>[];
       var client = decoder.readClient();
       var clock = decoder.reader.readVarUint().toInt();
-
       clientRefs[client] = refs;
-
       for (var j = 0; j < numberOfStructs; j++) {
         var info = decoder.readInfo();
         if ((Bits.bits5 & info) != 0) {
-          var leftOrigin = (info & Bit.bit8) == Bit.bit8 ? decoder.readLeftId() : null;
-          var rightOrigin = (info & Bit.bit7) == Bit.bit7 ? decoder.readRightId() : null;
+          var leftOrigin =
+              (info & Bit.bit8) == Bit.bit8 ? decoder.readLeftId() : null;
+          var rightOrigin =
+              (info & Bit.bit7) == Bit.bit7 ? decoder.readRightId() : null;
           var cantCopyParentInfo = (info & (Bit.bit7 | Bit.bit8)) == 0;
-          var hasParentYKey = cantCopyParentInfo ? decoder.readParentInfo() : false;
-          var parentYKey = cantCopyParentInfo && hasParentYKey ? decoder.readString() : null;
+          var hasParentYKey =
+              cantCopyParentInfo ? decoder.readParentInfo() : false;
+          var parentYKey =
+              cantCopyParentInfo && hasParentYKey ? decoder.readString() : null;
 
-          var str = Item(
-            ID(client, clock),
+          var str = Item.create(
+            ID.create(client, clock),
             null,
             leftOrigin,
             null,
             rightOrigin,
-            cantCopyParentInfo && !hasParentYKey ? decoder.readLeftId() : (parentYKey != null ? doc.get<AbstractType>(parentYKey) : null),
-            cantCopyParentInfo && (info & Bit.bit6) == Bit.bit6 ? decoder.readString() : null,
+            cantCopyParentInfo && !hasParentYKey
+                ? decoder.readLeftId()
+                : (parentYKey != null
+                    ? doc.get<AbstractType>(parentYKey, () => AbstractType())
+                    : null),
+            cantCopyParentInfo && (info & Bit.bit6) == Bit.bit6
+                ? decoder.readString()
+                : null,
             readItemContent(decoder, info),
           );
 
@@ -111,7 +151,7 @@ class EncodingUtils {
           clock += str.length;
         } else {
           var length = decoder.readLength();
-          refs.add(GC(ID(client, clock), length));
+          refs.add(GC.create(ID.create(client, clock), length));
           clock += length;
         }
       }
@@ -143,6 +183,6 @@ class EncodingUtils {
   }
 
   static Map<int, int> decodeStateVector(Uint8List input) {
-    return readStateVector(DSDecoderV2(input));
+    return readStateVector(DSDecoderV2(ByteArrayInputStream(input)));
   }
 }

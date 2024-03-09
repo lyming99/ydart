@@ -3,12 +3,17 @@ import 'package:ydart/utils/encoding.dart';
 import 'package:ydart/utils/struct_store.dart';
 import 'package:ydart/utils/transaction.dart';
 
+import '../utils/update_encoder.dart';
 import 'abstract_struct.dart';
 
 const int structGCRefNumber = 0;
 
 class GC extends AbstractStruct {
   GC({required super.id, required super.length});
+
+  factory GC.create(ID id, int length) {
+    return GC(id: id, length: length);
+  }
 
   @override
   bool get deleted => true;
@@ -37,7 +42,7 @@ class GC extends AbstractStruct {
   }
 
   @override
-  void write(AbstractEncoder encoder, int offset) {
+  void write(IUpdateEncoder encoder, int offset) {
     encoder.writeInfo(structGCRefNumber);
     encoder.writeLength(length - offset);
   }

@@ -2,7 +2,7 @@
 
 import 'package:ydart/lib0/byte_input_stream.dart';
 
-import 'AbstractStreamDecoder.dart';
+import 'abstract_stream_decoder.dart';
 
 class IntDiffDecoder extends AbstractStreamDecoder {
   late int _state;

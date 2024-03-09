@@ -4,6 +4,8 @@ import 'package:ydart/utils/y_doc.dart';
 import '../utils/encoding.dart';
 import '../utils/struct_store.dart';
 import '../utils/transaction.dart';
+import '../utils/update_decoder.dart';
+import '../utils/update_encoder.dart';
 import 'item.dart';
 
 class ContentDoc extends IContentEx {
@@ -27,12 +29,12 @@ class ContentDoc extends IContentEx {
   }
 
   @override
-  IContent copy() {
+  IContentEx copy() {
     return ContentDoc(doc);
   }
 
   @override
-  IContent splice(int offset) {
+  IContentEx splice(int offset) {
     throw UnimplementedError();
   }
 
@@ -55,15 +57,15 @@ class ContentDoc extends IContentEx {
   void gc(StructStore store) {}
 
   @override
-  void write(AbstractEncoder encoder, int offset) {
+  void write(IUpdateEncoder encoder, int offset) {
     encoder.writeString(doc.guid);
     docOptions.write(encoder, offset);
   }
 
-  static ContentDoc read(AbstractDecoder decoder) {
+  static ContentDoc read(IUpdateDecoder decoder) {
     var guid = decoder.readString();
     var opts = YDocOptions.read(decoder);
     opts.guid = guid;
-    return ContentDoc(YDoc(options: opts));
+    return ContentDoc(YDoc( opts));
   }
 }

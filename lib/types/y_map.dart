@@ -4,17 +4,20 @@ import 'package:ydart/types/abstract_type.dart';
 import '../structs/item.dart';
 import '../utils/encoding.dart';
 import '../utils/transaction.dart';
+import '../utils/update_encoder.dart';
 import '../utils/y_doc.dart';
 import '../utils/y_event.dart';
+
 const yMapRefId = 1;
+
 class YMapEvent extends YEvent {
   Set<String> keysChanged;
 
-  YMapEvent({
-    required super.target,
-    required super.transaction,
-    required this.keysChanged,
-  });
+  YMapEvent(
+    super.target,
+    super.transaction,
+    this.keysChanged,
+  );
 }
 
 class YMap extends AbstractType {
@@ -55,19 +58,21 @@ class YMap extends AbstractType {
   }
 
   @override
-  void integrate(YDoc? doc, Item item) {
+  void integrate(YDoc? doc, Item? item) {
     super.integrate(doc, item);
     for (var kvp in _prelimContent.entries) {
       set(kvp.key, kvp.value);
     }
     _prelimContent.clear();
   }
+
   @override
   void callObserver(Transaction transaction, Set<String> parentSubs) {
-    callTypeObservers(transaction, YMapEvent(target: this, transaction: transaction, keysChanged: parentSubs));
+    callTypeObservers(transaction, YMapEvent(this, transaction, parentSubs));
   }
+
   @override
-  void write(AbstractEncoder encoder) {
+  void write(IUpdateEncoder encoder) {
     encoder.writeTypeRef(yMapRefId);
   }
 }

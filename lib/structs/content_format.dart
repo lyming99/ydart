@@ -3,6 +3,8 @@ import 'package:ydart/structs/base_content.dart';
 import '../utils/encoding.dart';
 import '../utils/struct_store.dart';
 import '../utils/transaction.dart';
+import '../utils/update_decoder.dart';
+import '../utils/update_encoder.dart';
 import 'item.dart';
 
 class ContentFormat extends IContentEx {
@@ -28,7 +30,7 @@ class ContentFormat extends IContentEx {
   int get length => 1;
 
   @override
-  IContent copy() {
+  IContentEx copy() {
     return ContentFormat(key: key, value: value);
   }
 
@@ -38,7 +40,7 @@ class ContentFormat extends IContentEx {
   }
 
   @override
-  IContent splice(int offset) {
+  IContentEx splice(int offset) {
     throw UnimplementedError();
   }
 
@@ -59,12 +61,12 @@ class ContentFormat extends IContentEx {
   void gc(StructStore store) {}
 
   @override
-  void write(AbstractEncoder encoder, int offset) {
+  void write(IUpdateEncoder encoder, int offset) {
     encoder.writeKey(key);
     encoder.writeJson(value);
   }
 
-  static ContentFormat read(AbstractDecoder decoder) {
+  static ContentFormat read(IUpdateDecoder decoder) {
     var key = decoder.readKey();
     var value = decoder.readJson();
     return ContentFormat(key: key, value: value);

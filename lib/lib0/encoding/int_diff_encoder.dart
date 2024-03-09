@@ -10,7 +10,7 @@ import 'abstract_stream_encoder.dart';
 /// Encodes the values [3, 1100, 1101, 1050, 0] to [3, 1097, 1, -51, -1050].
 /// See [IntDiffDecoder].
 class IntDiffEncoder extends AbstractStreamEncoder<int> {
-    int _state;
+    late int _state;
 
     IntDiffEncoder(int start) {
         _state = start;
@@ -18,8 +18,6 @@ class IntDiffEncoder extends AbstractStreamEncoder<int> {
 
     @override
     void write(int value) {
-        checkDisposed();
-
         stream.writeVarInt(value - _state);
         _state = value;
     }

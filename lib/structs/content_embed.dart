@@ -3,6 +3,8 @@ import 'package:ydart/utils/encoding.dart';
 
 import '../utils/struct_store.dart';
 import '../utils/transaction.dart';
+import '../utils/update_decoder.dart';
+import '../utils/update_encoder.dart';
 import 'item.dart';
 
 class ContentEmbed extends IContentEx {
@@ -25,12 +27,12 @@ class ContentEmbed extends IContentEx {
   }
 
   @override
-  IContent copy() {
+  IContentEx copy() {
     return ContentEmbed(embed);
   }
 
   @override
-  IContent splice(int offset) {
+  IContentEx splice(int offset) {
     throw UnimplementedError();
   }
 
@@ -49,11 +51,11 @@ class ContentEmbed extends IContentEx {
   void gc(StructStore store) {}
 
   @override
-  void write(AbstractEncoder encoder, int offset) {
+  void write(IUpdateEncoder encoder, int offset) {
     encoder.writeJson(embed);
   }
 
-  static ContentEmbed read(AbstractDecoder decoder) {
+  static ContentEmbed read(IUpdateDecoder decoder) {
     var content = decoder.readJson();
     return ContentEmbed(content);
   }

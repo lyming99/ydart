@@ -5,5 +5,5 @@ abstract class IEncoder<T> {
 
     Uint8List toArray();
 
-    Tuple2<Uint8List, int> getBuffer();
+    Uint8List getBuffer();
 }

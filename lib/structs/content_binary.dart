@@ -6,6 +6,9 @@ import 'package:ydart/utils/encoding.dart';
 import 'package:ydart/utils/struct_store.dart';
 import 'package:ydart/utils/transaction.dart';
 
+import '../utils/update_decoder.dart';
+import '../utils/update_encoder.dart';
+
 class ContentBinary extends IContentEx {
   Uint8List content;
 
@@ -26,12 +29,12 @@ class ContentBinary extends IContentEx {
   }
 
   @override
-  IContent copy() {
+  IContentEx copy() {
     return ContentBinary(content);
   }
 
   @override
-  IContent splice(int offset) {
+  IContentEx splice(int offset) {
     throw UnimplementedError();
   }
 
@@ -50,11 +53,11 @@ class ContentBinary extends IContentEx {
   void gc(StructStore store) {}
 
   @override
-  void write(AbstractEncoder encoder, int offset) {
+  void write(IUpdateEncoder encoder, int offset) {
     encoder.writeBuffer(content);
   }
 
-  static ContentBinary read(AbstractDecoder decoder) {
+  static ContentBinary read(IUpdateDecoder decoder) {
     Uint8List content = decoder.readBuffer();
     return ContentBinary(content);
   }

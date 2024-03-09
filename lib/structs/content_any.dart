@@ -4,6 +4,9 @@ import 'package:ydart/utils/encoding.dart';
 import 'package:ydart/utils/struct_store.dart';
 import 'package:ydart/utils/transaction.dart';
 
+import '../utils/update_decoder.dart';
+import '../utils/update_encoder.dart';
+
 class ContentAny extends IContentEx {
   List<Object?> content;
 
@@ -26,12 +29,12 @@ class ContentAny extends IContentEx {
   }
 
   @override
-  IContent copy() {
+  IContentEx copy() {
     return ContentAny(content: content.toList());
   }
 
   @override
-  IContent splice(int offset) {
+  IContentEx splice(int offset) {
     return ContentAny(content: content.sublist(offset));
   }
 
@@ -54,7 +57,7 @@ class ContentAny extends IContentEx {
   void gc(StructStore store) {}
 
   @override
-  void write(AbstractEncoder encoder, int offset) {
+  void write(IUpdateEncoder encoder, int offset) {
     int len = content.length;
     encoder.writeLength(len - offset);
     for (int i = offset; i < len; i++) {
@@ -63,7 +66,7 @@ class ContentAny extends IContentEx {
     }
   }
 
-  static ContentAny read(AbstractDecoder decoder) {
+  static ContentAny read(IUpdateDecoder decoder) {
     var len = decoder.readLength();
     var content = <Object>[];
     for (var i = 0; i < len; i++) {

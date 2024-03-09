@@ -1,8 +1,13 @@
-import 'package:ydart/lib0/update_encoder_v2.dart';
+import 'package:ydart/lib0/byte_input_stream.dart';
 import 'package:ydart/utils/id.dart';
 import 'package:ydart/utils/transaction.dart';
 
 import '../structs/abstract_struct.dart';
+import '../structs/item.dart';
+import '../types/abstract_type.dart';
+import 'struct_store.dart';
+import 'update_decoder.dart';
+import 'update_encoder.dart';
 
 class DeleteItem {
   final int clock;
@@ -12,11 +17,19 @@ class DeleteItem {
 }
 
 class DeleteSet {
-  Map<int, List<DeleteItem>> clients;
+  late Map<int, List<DeleteItem>> clients;
 
   DeleteSet({
     required this.clients,
   });
+
+  factory DeleteSet.createFromStore(StructStore store) {
+    return DeleteSet(clients: {})..createDeleteSetFromStructStore(store);
+  }
+
+  factory DeleteSet.merge(List<DeleteSet> list) {
+    return DeleteSet(clients: {})..mergeDeleteSets(list);
+  }
 
   void add(int client, int clock, int length) {
     if (!clients.containsKey(client)) {
@@ -31,7 +44,7 @@ class DeleteSet {
       var structs = transaction.doc.store.clients[kvp.key];
       for (var del in kvp.value) {
         transaction.doc.store
-            .iterateStructs(transaction, structs, del.clock, del.length, fun);
+            .iterateStructs(transaction, structs!, del.clock, del.length, fun);
       }
     }
   }
@@ -60,13 +73,12 @@ class DeleteSet {
     return dis != null && findIndexSS(dis, id.clock) != null;
   }
 
-
   void sortAndMergeDeleteSet() {
     clients.forEach((client, dels) {
       dels.sort((a, b) => a.clock.compareTo(b.clock));
-
-      int i, j;
-      for (i = 1, j = 1; i < dels.length; i++) {
+      var i = 1;
+      var j = 1;
+      for (; i < dels.length; i++) {
         var left = dels[j - 1];
         var right = dels[i];
 
@@ -95,20 +107,20 @@ class DeleteSet {
 
   void tryGcDeleteSet(StructStore store, bool Function(Item) gcFilter) {
     clients.forEach((client, deleteItems) {
-      var structs = store.clients[client];
-
+      var structs = store.clients[client]!;
       for (int di = deleteItems.length - 1; di >= 0; di--) {
         var deleteItem = deleteItems[di];
         var endDeleteItemClock = deleteItem.clock + deleteItem.length;
 
-        for (int si = StructStore.findIndexSS(structs, deleteItem.clock); si < structs.length; si++) {
+        for (int si = StructStore.findIndexSS(structs, deleteItem.clock);
+            si < structs.length;
+            si++) {
           var str = structs[si];
           if (str.id.clock >= endDeleteItemClock) {
             break;
           }
-
           if (str is Item && str.deleted && !str.keep && gcFilter(str)) {
-            str.gc(store, parentGCd: false);
+            str.gc(store, false);
           }
         }
       }
@@ -117,13 +129,17 @@ class DeleteSet {
 
   void tryMergeDeleteSet(StructStore store) {
     clients.forEach((client, deleteItems) {
-      var structs = store.clients[client];
+      var structs = store.clients[client]!;
 
       for (int di = deleteItems.length - 1; di >= 0; di--) {
         var deleteItem = deleteItems[di];
         var mostRightIndexToCheck = structs.length - 1;
-        mostRightIndexToCheck = 1 + StructStore.findIndexSS(structs, deleteItem.clock + deleteItem.length - 1);
-        for (int si = mostRightIndexToCheck; si > 0 && structs[si].id.clock >= deleteItem.clock; si--) {
+        mostRightIndexToCheck = 1 +
+            StructStore.findIndexSS(
+                structs, deleteItem.clock + deleteItem.length - 1);
+        for (int si = mostRightIndexToCheck;
+            si > 0 && structs[si].id.clock >= deleteItem.clock;
+            si--) {
           tryToMergeWithLeft(structs, si);
         }
       }
@@ -134,13 +150,13 @@ class DeleteSet {
     var left = structs[pos - 1];
     var right = structs[pos];
 
-    if (left.deleted == right.deleted && left.runtimeType == right.runtimeType) {
+    if (left.deleted == right.deleted &&
+        left.runtimeType == right.runtimeType) {
       if (left.mergeWith(right)) {
         structs.removeAt(pos);
-
         if (right is Item && right.parentSub != null) {
-          if ((right.parent as AbstractType)._map[right.parentSub] == right) {
-            (right.parent as AbstractType)._map[right.parentSub] = left as Item;
+          if ((right.parent as AbstractType).map[right.parentSub] == right) {
+            (right.parent as AbstractType).map[right.parentSub!] = left as Item;
           }
         }
       }
@@ -170,7 +186,6 @@ class DeleteSet {
   void createDeleteSetFromStructStore(StructStore ss) {
     ss.clients.forEach((client, structs) {
       var dsItems = <DeleteItem>[];
-
       for (int i = 0; i < structs.length; i++) {
         var str = structs[i];
         if (str.deleted) {
@@ -186,7 +201,6 @@ class DeleteSet {
               break;
             }
           }
-
           dsItems.add(DeleteItem(clock, len));
         }
       }
@@ -216,7 +230,7 @@ class DeleteSet {
   }
 
   static DeleteSet read(IDSDecoder decoder) {
-    var ds = DeleteSet();
+    var ds = DeleteSet(clients: {});
 
     var numClients = decoder.reader.readVarUint();
     assert(numClients >= 0);
@@ -233,7 +247,8 @@ class DeleteSet {
         }
 
         for (var j = 0; j < numberOfDeletes; j++) {
-          var deleteItem = DeleteItem(decoder.readDsClock(), decoder.readDsLength());
+          var deleteItem =
+              DeleteItem(decoder.readDsClock(), decoder.readDsLength());
           ds.clients[client]!.add(deleteItem);
         }
       }

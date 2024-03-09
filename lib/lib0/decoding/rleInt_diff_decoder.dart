@@ -1,4 +1,6 @@
-﻿import 'AbstractStreamDecoder.dart';
+﻿import 'package:ydart/lib0/byte_input_stream.dart';
+
+import 'abstract_stream_decoder.dart';
 
 class RleIntDiffDecoder extends AbstractStreamDecoder<int> {
   int _state = 0;
@@ -13,10 +15,10 @@ class RleIntDiffDecoder extends AbstractStreamDecoder<int> {
     checkDisposed();
 
     if (_count == 0) {
-      _state += readVarInt(stream);
+      _state += stream.readVarInt();
 
       if (hasContent) {
-        _count = readVarUint(stream) + 1;
+        _count = stream.readVarUint() + 1;
         assert(_count > 0);
       } else {
         // Read the current value forever.

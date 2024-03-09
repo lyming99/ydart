@@ -301,26 +301,26 @@ class YArrayBase extends AbstractType {
     }
     int len = end - start;
     var cs = <Object>[];
-    var n = this.start;
-    while (n != null && len > 0) {
-      if (n.countable && !n.deleted) {
-        var c = n.content.getContent();
-        if (c.length <= start) {
-          start -= c.length;
+    var item = this.start;
+    while (item != null && len > 0) {
+      if (item.countable && !item.deleted) {
+        var content = item.content.getContent();
+        if (content.length <= start) {
+          start -= content.length;
         } else {
-          for (int i = start; i < c.length && len > 0; i++) {
-            cs.add(c[i]);
+          for (int i = start; i < content.length && len > 0; i++) {
+            cs.add(content[i]!);
             len--;
           }
           start = 0;
         }
       }
-      n = n.right as Item?;
+      item = item.right as Item?;
     }
     return cs;
   }
 
-  void foreEach(Function(Object item, int index) fun) {
+  void foreEach(Function(Object? item, int index) fun) {
     int index = 0;
     var n = start;
     while (n != null) {
@@ -335,7 +335,7 @@ class YArrayBase extends AbstractType {
   }
 
   void forEachSnapshot(
-      Function(Object item, int index) fun, Snapshot snapshot) {
+      Function(Object? item, int index) fun, Snapshot snapshot) {
     int index = 0;
     var n = start;
     while (n != null) {

@@ -2,8 +2,8 @@
 
 import 'package:ydart/lib0/byte_input_stream.dart';
 
-import 'IDecoder.dart';
-import 'UintOptRleDecoder.dart';
+import 'idecoder.dart';
+import 'uint_opt_rle_decoder.dart';
 
 class StringDecoder implements IDecoder<String> {
   late UintOptRleDecoder _lengthDecoder;
@@ -18,7 +18,7 @@ class StringDecoder implements IDecoder<String> {
   }
 
   void dispose() {
-    _dispose(disposing: true);
+    _dispose(true);
   }
 
   @override
@@ -33,7 +33,7 @@ class StringDecoder implements IDecoder<String> {
     _pos += length;
 
     if (_pos >= _value.length) {
-      _value = null;
+      _value = "";
     }
 
     return result;
@@ -42,10 +42,8 @@ class StringDecoder implements IDecoder<String> {
   void _dispose(bool disposing) {
     if (!_disposed) {
       if (disposing) {
-        _lengthDecoder?.dispose();
+        _lengthDecoder.dispose();
       }
-
-      _lengthDecoder = null;
       _disposed = true;
     }
   }

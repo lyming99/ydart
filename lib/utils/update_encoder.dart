@@ -1,31 +1,46 @@
-import 'dart:io';
+import 'dart:typed_data';
 
-abstract class IDSEncoder implements IDisposable {
-  late Stream RestWriter;
+import '../lib0/byte_output_stream.dart';
+import 'id.dart';
 
-  List<int> ToArray();
+abstract class IDSEncoder {
+  ByteArrayOutputStream restWriter;
 
-  void ResetDsCurVal();
+  IDSEncoder(this.restWriter);
 
-  void WriteDsClock(int clock);
-  void WriteDsLength(int length);
+  Uint8List toArray();
+
+  void resetDsCurVal();
+
+  void writeDsClock(int clock);
+
+  void writeDsLength(int length);
 }
 
-abstract class IUpdateEncoder implements IDSEncoder {
-  void WriteLeftId(ID id);
-  void WriteRightId(ID id);
+abstract class IUpdateEncoder extends IDSEncoder {
+  IUpdateEncoder(super.restWriter);
 
-  void WriteClient(int client);
+  void writeLeftId(ID id);
 
-  void WriteInfo(int info);
-  void WriteString(String s);
-  void WriteParentInfo(bool isYKey);
-  void WriteTypeRef(int info);
+  void writeRightId(ID id);
 
-  void WriteLength(int len);
+  void writeClient(int client);
 
-  void WriteAny(Object any);
-  void WriteBuffer(List<int> buf);
-  void WriteKey(String key);
-  void WriteJson<T>(T any);
+  void writeInfo(int info);
+
+  void writeString(String s);
+
+  void writeParentInfo(bool isYKey);
+
+  void writeTypeRef(int info);
+
+  void writeLength(int len);
+
+  void writeAny(Object? any);
+
+  void writeBuffer(Uint8List buf);
+
+  void writeKey(String key);
+
+  void writeJson<T>(T any);
 }

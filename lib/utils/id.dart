@@ -1,5 +1,8 @@
 import 'package:ydart/utils/encoding.dart';
 
+import '../lib0/byte_input_stream.dart';
+import '../lib0/byte_output_stream.dart';
+
 class ID {
   int client;
   int clock;
@@ -24,12 +27,12 @@ class ID {
   @override
   int get hashCode => client.hashCode ^ clock.hashCode;
 
-  void write(AbstractEncoder encoder) {
+  void write(ByteArrayOutputStream encoder) {
     encoder.writeVarInt(client);
     encoder.writeVarInt(clock);
   }
 
-  static ID read(AbstractDecoder decoder) {
+  static ID read(ByteArrayInputStream decoder) {
     var client = decoder.readVarInt();
     var clock = decoder.readVarInt();
     return ID(client: client, clock: clock);

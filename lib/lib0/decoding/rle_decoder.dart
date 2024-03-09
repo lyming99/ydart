@@ -1,6 +1,6 @@
-﻿import 'dart:io';
+﻿import 'package:ydart/lib0/byte_input_stream.dart';
 
-import 'AbstractStreamDecoder.dart';
+import 'abstract_stream_decoder.dart';
 
 class RleDecoder extends AbstractStreamDecoder<int> {
   int _state = 0;
@@ -14,7 +14,6 @@ class RleDecoder extends AbstractStreamDecoder<int> {
 
     if (_count == 0) {
       _state = stream.read();
-
       if (hasContent) {
         _count = stream.readVarUint() + 1;
         assert(_count > 0);

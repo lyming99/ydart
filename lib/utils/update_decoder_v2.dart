@@ -1,34 +1,24 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:convert';
-import 'dart:collection';
 
-abstract class IDSDecoder {
-  void dispose();
-  void resetDsCurVal();
-  int readDsClock();
-  int readDsLength();
-}
+import 'package:ydart/lib0/byte_input_stream.dart';
 
-class DSDecoderV2 implements IDSDecoder {
-  bool _leaveOpen;
+import '../lib0/decoding/int_diff_opt_rle_decoder.dart';
+import '../lib0/decoding/rle_decoder.dart';
+import '../lib0/decoding/string_decoder.dart';
+import '../lib0/decoding/uint_opt_rle_decoder.dart';
+import 'id.dart';
+import 'update_decoder.dart';
+
+class DSDecoderV2 extends IDSDecoder {
+  bool leaveOpen;
   int _dsCurVal;
-  Stream _reader;
   bool _disposed;
 
-  DSDecoderV2(Stream input, {bool leaveOpen = false}) {
-    _leaveOpen = leaveOpen;
-    _reader = input;
-    _disposed = false;
-  }
-
-  Stream get reader => _reader;
-
-  @override
-  void dispose() {
-    _dispose(disposing: true);
-    // System.GC.SuppressFinalize(this);
-  }
+  DSDecoderV2(super.reader, {this.leaveOpen = false})
+      : _disposed = false,
+        _dsCurVal = 0;
 
   @override
   void resetDsCurVal() {
@@ -37,74 +27,69 @@ class DSDecoderV2 implements IDSDecoder {
 
   @override
   int readDsClock() {
-    _dsCurVal += _reader.readVarUint();
+    _dsCurVal += reader.readVarUint()!;
     assert(_dsCurVal >= 0);
     return _dsCurVal;
   }
 
   @override
   int readDsLength() {
-    var diff = _reader.readVarUint() + 1;
+    var diff = reader.readVarUint() + 1;
     assert(diff >= 0);
     _dsCurVal += diff;
     return diff;
   }
 
-  void _dispose({bool disposing}) {
-    if (!_disposed) {
-      if (disposing && !_leaveOpen) {
-        _reader?.close();
-      }
-
-      _reader = null;
-      _disposed = true;
-    }
+  void _dispose() {
+    _disposed = true;
   }
 
   void checkDisposed() {
     if (_disposed) {
-      throw ObjectDisposedException('DSDecoderV2');
+      throw Exception('DSDecoderV2');
     }
   }
 }
 
 class UpdateDecoderV2 extends DSDecoderV2 implements IUpdateDecoder {
-  List<String> _keys;
-  IntDiffOptRleDecoder _keyClockDecoder;
-  UintOptRleDecoder _clientDecoder;
-  IntDiffOptRleDecoder _leftClockDecoder;
-  IntDiffOptRleDecoder _rightClockDecoder;
-  RleDecoder _infoDecoder;
-  StringDecoder _stringDecoder;
-  RleDecoder _parentInfoDecoder;
-  UintOptRleDecoder _typeRefDecoder;
-  UintOptRleDecoder _lengthDecoder;
+  late List<String> _keys;
+  late IntDiffOptRleDecoder _keyClockDecoder;
+  late UintOptRleDecoder _clientDecoder;
+  late IntDiffOptRleDecoder _leftClockDecoder;
+  late IntDiffOptRleDecoder _rightClockDecoder;
+  late RleDecoder _infoDecoder;
+  late StringDecoder _stringDecoder;
+  late RleDecoder _parentInfoDecoder;
+  late UintOptRleDecoder _typeRefDecoder;
+  late UintOptRleDecoder _lengthDecoder;
 
-  UpdateDecoderV2(Stream input, {bool leaveOpen = false}) : super(input, leaveOpen: leaveOpen) {
+  UpdateDecoderV2(ByteArrayInputStream input, {bool leaveOpen = false})
+      : super(input, leaveOpen: leaveOpen) {
     _keys = [];
+    // Read feature flag - currently unused.
     input.readByte();
-
-    _keyClockDecoder = IntDiffOptRleDecoder(Uint8List.fromList(input.readVarUint8ArrayAsStream()));
-    _clientDecoder = UintOptRleDecoder(Uint8List.fromList(input.readVarUint8ArrayAsStream()));
-    _leftClockDecoder = IntDiffOptRleDecoder(Uint8List.fromList(input.readVarUint8ArrayAsStream()));
-    _rightClockDecoder = IntDiffOptRleDecoder(Uint8List.fromList(input.readVarUint8ArrayAsStream()));
-    _infoDecoder = RleDecoder(Uint8List.fromList(input.readVarUint8ArrayAsStream()));
-    _stringDecoder = StringDecoder(Uint8List.fromList(input.readVarUint8ArrayAsStream()));
-    _parentInfoDecoder = RleDecoder(Uint8List.fromList(input.readVarUint8ArrayAsStream()));
-    _typeRefDecoder = UintOptRleDecoder(Uint8List.fromList(input.readVarUint8ArrayAsStream()));
-    _lengthDecoder = UintOptRleDecoder(Uint8List.fromList(input.readVarUint8ArrayAsStream()));
+    _keyClockDecoder = IntDiffOptRleDecoder(input.readVarUint8ArrayAsStream());
+    _clientDecoder = UintOptRleDecoder(input.readVarUint8ArrayAsStream());
+    _leftClockDecoder = IntDiffOptRleDecoder(input.readVarUint8ArrayAsStream());
+    _rightClockDecoder =
+        IntDiffOptRleDecoder(input.readVarUint8ArrayAsStream());
+    _infoDecoder = RleDecoder(input.readVarUint8ArrayAsStream());
+    _stringDecoder = StringDecoder(input.readVarUint8ArrayAsStream());
+    _parentInfoDecoder = RleDecoder(input.readVarUint8ArrayAsStream());
+    _typeRefDecoder = UintOptRleDecoder(input.readVarUint8ArrayAsStream());
+    _lengthDecoder = UintOptRleDecoder(input.readVarUint8ArrayAsStream());
   }
 
   @override
   ID readLeftId() {
     checkDisposed();
-    return ID(_clientDecoder.read(), _leftClockDecoder.read());
+    return ID.create(_clientDecoder.read(), _leftClockDecoder.read());
   }
 
   @override
   ID readRightId() {
     checkDisposed();
-    return ID(_clientDecoder.read(), _rightClockDecoder.read());
+    return ID.create(_clientDecoder.read(), _rightClockDecoder.read());
   }
 
   @override
@@ -177,34 +162,5 @@ class UpdateDecoderV2 extends DSDecoderV2 implements IUpdateDecoder {
     var jsonString = reader.readVarString();
     var result = json.decode(jsonString);
     return result;
-  }
-
-  @override
-  void _dispose({bool disposing}) {
-    if (!_disposed) {
-      if (disposing) {
-        _keyClockDecoder?.dispose();
-        _clientDecoder?.dispose();
-        _leftClockDecoder?.dispose();
-        _rightClockDecoder?.dispose();
-        _infoDecoder?.dispose();
-        _stringDecoder?.dispose();
-        _parentInfoDecoder?.dispose();
-        _typeRefDecoder?.dispose();
-        _lengthDecoder?.dispose();
-      }
-
-      _keyClockDecoder = null;
-      _clientDecoder = null;
-      _leftClockDecoder = null;
-      _rightClockDecoder = null;
-      _infoDecoder = null;
-      _stringDecoder = null;
-      _parentInfoDecoder = null;
-      _typeRefDecoder = null;
-      _lengthDecoder = null;
-    }
-
-    super._dispose(disposing: disposing);
   }
 }

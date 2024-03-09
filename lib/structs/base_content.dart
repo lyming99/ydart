@@ -1,7 +1,9 @@
 import 'package:ydart/utils/encoding.dart';
+import 'package:ydart/utils/update_encoder.dart';
 
 import '../utils/struct_store.dart';
 import '../utils/transaction.dart';
+import '../utils/update_decoder.dart';
 import 'item.dart';
 
 abstract class IContent {
@@ -9,11 +11,11 @@ abstract class IContent {
 
   int get length;
 
-  List<dynamic> getContent();
+  List<Object?> getContent();
 
-  IContent copy();
+  IContentEx copy();
 
-  IContent splice(int offset);
+  IContentEx splice(int offset);
 
   bool mergeWith(IContent right);
 }
@@ -27,5 +29,5 @@ abstract class IContentEx extends IContent {
 
   void gc(StructStore store);
 
-  void write(AbstractEncoder encoder, int offset);
+  void write(IUpdateEncoder encoder, int offset);
 }

@@ -1,9 +1,11 @@
 /// 未完成编解码部分，1次review
 
-import '../lib0/update_encoder_v2.dart';
+import 'package:ydart/lib0/byte_output_stream.dart';
+
 import 'delete_set.dart';
 import 'id.dart';
 import 'struct_store.dart';
+import 'update_encoder_v2.dart';
 import 'y_doc.dart';
 
 class Snapshot {
@@ -20,7 +22,7 @@ class Snapshot {
     if (originDoc.gc) {
       throw Exception("originDoc must not be garbage collected");
     }
-    var encoder = UpdateEncoderV2();
+    var encoder = UpdateEncoderV2(ByteArrayOutputStream());
     originDoc.transact((tr) {
       var size = stateVector.values.where((element) => element > 0).length;
       encoder.restWriter.writeVarUint(size);
@@ -34,7 +36,7 @@ class Snapshot {
           tr.doc.store.getItemCleanStart(tr, ID.create(client, clock));
         }
         var structs = originDoc.store.clients[client]!;
-        var lastStructIndex = structStore.findIndexSS(structs, clock - 1);
+        var lastStructIndex = StructStore.findIndexSS(structs, clock - 1);
         encoder.restWriter.writeVarUint(lastStructIndex + 1);
         encoder.writeClient(client);
         encoder.restWriter.writeVarUint(0);
@@ -44,7 +46,7 @@ class Snapshot {
       }
       deleteSet.write(encoder);
     });
-    var newDoc = YDoc(options: opts ?? originDoc.cloneOptionsWithNewGuid());
+    var newDoc = YDoc(opts ?? originDoc.cloneOptionsWithNewGuid());
     newDoc.applyUpdateV2(encoder.toArray(), transactionOrigin: "snapshot");
     return newDoc;
   }

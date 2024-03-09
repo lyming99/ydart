@@ -5,6 +5,8 @@ import 'package:ydart/structs/base_content.dart';
 import '../utils/encoding.dart';
 import '../utils/struct_store.dart';
 import '../utils/transaction.dart';
+import '../utils/update_decoder.dart';
+import '../utils/update_encoder.dart';
 import 'item.dart';
 
 class ContentJson extends IContentEx {
@@ -29,12 +31,12 @@ class ContentJson extends IContentEx {
   }
 
   @override
-  IContent copy() {
+  IContentEx copy() {
     return ContentJson(content: content);
   }
 
   @override
-  IContent splice(int offset) {
+  IContentEx splice(int offset) {
     var right = ContentJson(content: content.sublist(offset));
     content.removeRange(offset, content.length - offset);
     return right;
@@ -58,7 +60,7 @@ class ContentJson extends IContentEx {
   void gc(StructStore store) {}
 
   @override
-  void write(AbstractEncoder encoder, int offset) {
+  void write(IUpdateEncoder encoder, int offset) {
     var len = content.length;
     encoder.writeLength(len);
     for (int i = offset; i < len; i++) {
@@ -68,7 +70,7 @@ class ContentJson extends IContentEx {
     }
   }
 
-  static ContentJson read(AbstractDecoder decoder) {
+  static ContentJson read(IUpdateDecoder decoder) {
     var len = decoder.readLength();
     var content = [];
     for (var i = 0; i < len; i++) {

@@ -5,14 +5,16 @@ import 'package:ydart/utils/y_event.dart';
 import '../structs/item.dart';
 import '../utils/encoding.dart';
 import '../utils/transaction.dart';
+import '../utils/update_encoder.dart';
 import '../utils/y_doc.dart';
 
 const yArrayRefId = 0;
+
 class YArrayEvent extends YEvent {
-  YArrayEvent({
-    required super.target,
-    required super.transaction,
-  });
+  YArrayEvent(
+    super.target,
+    super.transaction,
+  );
 }
 
 class YArray extends YArrayBase {
@@ -23,13 +25,13 @@ class YArray extends YArrayBase {
   int get length => _prelimContent.length;
 
   @override
-  void integrate(YDoc? doc, Item item) {
+  void integrate(YDoc? doc, Item? item) {
     super.integrate(doc, item);
     insert(0, _prelimContent);
   }
 
   @override
-  void write(AbstractEncoder encoder) {
+  void write(IUpdateEncoder encoder) {
     encoder.writeTypeRef(yArrayRefId);
   }
 
@@ -40,8 +42,7 @@ class YArray extends YArrayBase {
   @override
   void callObserver(Transaction transaction, Set<String> parentSubs) {
     super.callObserver(transaction, parentSubs);
-    callTypeObservers(
-        transaction, YArrayEvent(target: this, transaction: transaction));
+    callTypeObservers(transaction, YArrayEvent(this, transaction));
   }
 
   void insert(int index, List<Object> content) {
@@ -74,20 +75,20 @@ class YArray extends YArrayBase {
     return internalSlice(start, end);
   }
 
-  Object get(int index) {
+  Object? get(int index) {
     var mark = findMarker(index);
-    var n = start;
+    var item = start;
     if (mark != null) {
-      n = mark.p;
+      item = mark.p;
       index -= mark.index;
     }
     // 按照逻辑，right 只会是 item 或者 null，而不应该是 gc
-    for (; n != null; n = n.right as Item?) {
-      if (!n.deleted && n.countable) {
-        if (index < n.length) {
-          return n.content.getContent()[index];
+    for (; item != null; item = item.right as Item?) {
+      if (!item.deleted && item.countable) {
+        if (index < item.length) {
+          return item.content.getContent()[index];
         }
-        index -= n.length;
+        index -= item.length;
       }
     }
     return -1;

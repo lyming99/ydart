@@ -1,11 +1,15 @@
 ﻿import 'dart:typed_data';
 
+import 'package:ydart/lib0/byte_output_stream.dart';
+
+import 'IEncoder.dart';
+
 abstract class AbstractStreamEncoder<T> implements IEncoder<T> {
-    late Uint8List _stream;
+    late ByteArrayOutputStream stream;
     bool _disposed = false;
 
     AbstractStreamEncoder() {
-        _stream = Uint8List(0);
+        stream = ByteArrayOutputStream(32);
     }
 
     void dispose() {
@@ -17,12 +21,12 @@ abstract class AbstractStreamEncoder<T> implements IEncoder<T> {
 
     Uint8List toArray() {
         _flush();
-        return _stream;
+        return stream.toByteArray();
     }
 
-    Tuple2<Uint8List, int> getBuffer() {
+    Uint8List getBuffer() {
         _flush();
-        return Tuple2(_stream.buffer.asUint8List(), _stream.length);
+        return stream.toByteArray();
     }
 
     void _flush() {
@@ -32,9 +36,8 @@ abstract class AbstractStreamEncoder<T> implements IEncoder<T> {
     void _dispose(bool disposing) {
         if (!_disposed) {
             if (disposing) {
-                _stream = Uint8List(0);
+                stream = ByteArrayOutputStream();
             }
-
             _disposed = true;
         }
     }

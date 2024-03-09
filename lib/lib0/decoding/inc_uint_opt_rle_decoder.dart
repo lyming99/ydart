@@ -2,7 +2,7 @@
 
 import 'package:ydart/lib0/byte_input_stream.dart';
 
-import 'AbstractStreamDecoder.dart';
+import 'abstract_stream_decoder.dart';
 
 class IncUintOptRleDecoder extends AbstractStreamDecoder<int> {
   int _state = 0;
@@ -19,11 +19,8 @@ class IncUintOptRleDecoder extends AbstractStreamDecoder<int> {
     checkDisposed();
 
     if (_count == 0) {
-      var valueAndSign = stream.readVarInt();
-      int value = valueAndSign[0];
-      int sign = valueAndSign[1];
-
-      bool isNegative = sign < 0;
+      var value = stream.readVarInt();
+      bool isNegative = value < 0;
       if (isNegative) {
         _state = -value;
         _count = stream.readVarUint() + 2;

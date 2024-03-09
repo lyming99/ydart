@@ -3,6 +3,8 @@ import 'package:ydart/structs/base_content.dart';
 import '../utils/encoding.dart';
 import '../utils/struct_store.dart';
 import '../utils/transaction.dart';
+import '../utils/update_decoder.dart';
+import '../utils/update_encoder.dart';
 import 'item.dart';
 
 class ContentString extends IContentEx {
@@ -25,12 +27,12 @@ class ContentString extends IContentEx {
   }
 
   @override
-  IContent copy() {
+  IContentEx copy() {
     return ContentString(content);
   }
 
   @override
-  IContent splice(int offset) {
+  IContentEx splice(int offset) {
     return ContentString(content.substring(offset));
   }
 
@@ -53,11 +55,11 @@ class ContentString extends IContentEx {
   void gc(StructStore store) {}
 
   @override
-  void write(AbstractEncoder encoder, int offset) {
+  void write(IUpdateEncoder encoder, int offset) {
     encoder.writeString(content.substring(offset));
   }
 
-  static ContentString read(AbstractDecoder decoder) {
+  static ContentString read(IUpdateDecoder decoder) {
     return ContentString(decoder.readString());
   }
 }

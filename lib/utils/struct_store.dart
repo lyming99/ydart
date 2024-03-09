@@ -1,19 +1,43 @@
 import 'dart:collection';
-import 'dart:io';
+
+import 'package:ydart/lib0/byte_input_stream.dart';
+import 'package:ydart/lib0/byte_output_stream.dart';
+import 'package:ydart/utils/queue_stack.dart';
+
+import '../structs/abstract_struct.dart';
+import '../structs/gc.dart';
+import '../structs/item.dart';
+import 'delete_set.dart';
+import 'id.dart';
+import 'transaction.dart';
+import 'update_decoder.dart';
+import 'update_decoder_v2.dart';
+import 'update_encoder_v2.dart';
 
 class PendingClientStructRef {
-  int nextReadOperation;
+  int nextReadOperation = 0;
   List<AbstractStruct> refs = [];
+}
+
+class FollowRedoneResult {
+  AbstractStruct? item;
+
+  int diff = 0;
+
+  FollowRedoneResult({
+    this.item,
+    required this.diff,
+  });
 }
 
 class StructStore {
   final Map<int, List<AbstractStruct>> clients = {};
   final Map<int, PendingClientStructRef> _pendingClientStructRefs = {};
-  final Stack<AbstractStruct> _pendingStack = Stack<AbstractStruct>();
+  final QueueStack<AbstractStruct> _pendingStack = QueueStack<AbstractStruct>();
   final List<DSDecoderV2> _pendingDeleteReaders = [];
 
   Map<int, int> getStateVector() {
-    var result = {};
+    var result = <int, int>{};
     for (var entry in clients.entries) {
       var str = entry.value[entry.value.length - 1];
       result[entry.key] = str.id.clock + str.length;
@@ -79,14 +103,14 @@ class StructStore {
     if (!clients.containsKey(str.id.client)) {
       clients[str.id.client] = [];
     } else {
-      var structs = clients[str.id.client];
-      var lastStruct = structs[structs.length - 1];
+      var structs = clients[str.id.client]!;
+      var lastStruct = structs.last;
       if (lastStruct.id.clock + lastStruct.length != str.id.clock) {
         throw Exception('Unexpected');
       }
     }
 
-    clients[str.id.client].add(str);
+    clients[str.id.client]!.add(str);
   }
 
   static int findIndexSS(List<AbstractStruct> structs, int clock) {
@@ -141,7 +165,7 @@ class StructStore {
     var str = structs[index];
     if (str.id.clock < clock && str is Item) {
       structs.insert(index + 1,
-          (str as Item).splitItem(transaction, (clock - str.id.clock).toInt()));
+          str.splitItem(transaction, (clock - str.id.clock).toInt()));
       return index + 1;
     }
     return index;
@@ -164,7 +188,7 @@ class StructStore {
       int index = findIndexSS(structs, id.clock);
       var str = structs[index];
 
-      if ((id.clock != str.id.clock + str.length - 1) && !(str is GC)) {
+      if ((id.clock != str.id.clock + str.length - 1) && str is! GC) {
         structs.insert(
             index + 1,
             (str as Item)
@@ -188,7 +212,7 @@ class StructStore {
   }
 
   void iterateStructs(Transaction transaction, List<AbstractStruct> structs,
-      int clockStart, int length, Predicate<AbstractStruct> fun) {
+      int clockStart, int length, bool Function(AbstractStruct) fun) {
     if (length <= 0) {
       return;
     }
@@ -212,26 +236,26 @@ class StructStore {
     } while (index < structs.length && structs[index].id.clock < clockEnd);
   }
 
-  Tuple2<AbstractStruct, int> followRedone(ID id) {
+  FollowRedoneResult followRedone(ID id) {
     ID? nextId = id;
     int diff = 0;
     AbstractStruct item;
 
     do {
       if (diff > 0) {
-        nextId = ID(nextId!.client, nextId.clock + diff);
+        nextId = ID.create(nextId!.client, nextId.clock + diff);
       }
 
       item = find(nextId!);
       diff = (nextId.clock - item.id.clock).toInt();
-      nextId = (item as Item)?.redone;
+      nextId = (item as Item?)?.redone;
     } while (nextId != null && item is Item);
 
-    return Tuple2(item, diff);
+    return FollowRedoneResult(item: item, diff: diff);
   }
 
   void readAndApplyDeleteSet(IDSDecoder decoder, Transaction transaction) {
-    var unappliedDs = DeleteSet();
+    var unappliedDs = DeleteSet(clients: {});
     var numClients = decoder.reader.readVarUint();
 
     for (int i = 0; i < numClients; i++) {
@@ -288,10 +312,10 @@ class StructStore {
     }
 
     if (unappliedDs.clients.isNotEmpty) {
-      var unappliedDsEncoder = DSEncoderV2();
+      var unappliedDsEncoder = DSEncoderV2(ByteArrayOutputStream());
       unappliedDs.write(unappliedDsEncoder);
-      _pendingDeleteReaders.add(
-          DSDecoderV2(MemoryStream.fromList(unappliedDsEncoder.toBytes())));
+      _pendingDeleteReaders
+          .add(DSDecoderV2(ByteArrayInputStream(unappliedDsEncoder.toArray())));
     }
   }
 

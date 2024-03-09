@@ -1,0 +1,127 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+class ByteArrayOutputStream {
+  late Uint8List _buf;
+  int _count = 0;
+
+  ByteArrayOutputStream([int size = 32]) {
+    if (size < 0) {
+      throw ArgumentError('Negative initial size: $size');
+    }
+    _buf = Uint8List(size);
+  }
+
+  void _ensureCapacity(int minCapacity) {
+    int oldCapacity = _buf.length;
+    int minGrowth = minCapacity - oldCapacity;
+    if (minGrowth > 0) {
+      _buf = Uint8List.fromList(List<int>.filled(minCapacity, 0, growable: true)
+        ..setRange(0, oldCapacity, _buf));
+    }
+  }
+
+  void write(int b) {
+    _ensureCapacity(_count + 1);
+    _buf[_count] = b;
+    _count += 1;
+  }
+
+  void writeBytes(Uint8List b) {
+    writeBuffer(b, 0, b.length);
+  }
+
+  void writeBuffer(Uint8List b, int off, int len) {
+    if (off < 0 || len < 0 || len > b.length - off) {
+      throw RangeError('Invalid offset or length');
+    }
+    _ensureCapacity(_count + len);
+    _buf.setRange(_count, _count + len, b.sublist(off, off + len));
+    _count += len;
+  }
+
+  void reset() {
+    _count = 0;
+  }
+
+  Uint8List toByteArray() {
+    return Uint8List.fromList(_buf.sublist(0, _count));
+  }
+
+  int size() {
+    return _count;
+  }
+
+  String toString() {
+    return String.fromCharCodes(_buf.sublist(0, _count));
+  }
+
+  void close() {}
+
+  void writeUint16(int num) {
+    write(num & 0xFF);
+    write((num >> 8) & 0xFF);
+  }
+
+  void writeUint32(int num) {
+    for (int i = 0; i < 4; i++) {
+      write(num & 0xFF);
+      num >>= 8;
+    }
+  }
+
+  void writeVarUint(int num) {
+    while (num > 0x7F) {
+      write(0x80 | (num & 0x7F));
+      num >>= 7;
+    }
+    write(num & 0x7F);
+  }
+
+  void writeVarInt(int num, {bool? treatZeroAsNegative}) {
+    bool isNegative = num == 0 ? (treatZeroAsNegative ?? false) : num < 0;
+    if (isNegative) {
+      num = -num;
+    }
+
+    write((num > 0x3F ? 0x80 : 0) | (isNegative ? 0x40 : 0) | (num & 0x3F));
+    num >>= 6;
+
+    while (num > 0) {
+      write((num > 0x7F ? 0x80 : 0) | (num & 0x7F));
+      num >>= 7;
+    }
+  }
+
+  void writeVarString(String str) {
+    Uint8List data = utf8.encode(str);
+    writeVarUint8Array(data);
+  }
+
+  void writeVarUint8Array(Uint8List array) {
+    writeVarUint(array.length);
+    writeBytes(array);
+  }
+
+  void writeAny(dynamic o) {
+    if (o is String) {
+      write(0x77);
+      writeVarString(o);
+    } else if (o is bool) {
+      write(o ? 0x78 : 0x79);
+    } else if (o is double) {
+      // Handle double
+    } else if (o is int) {
+      write(0x7D);
+      writeVarInt(o);
+    } else if (o == null) {
+      write(0x7E);
+    } else if (o is List) {
+      // Handle List
+    } else if (o is Map) {
+      // Handle Map
+    } else {
+      throw new UnsupportedError('Unsupported object type: ${o.runtimeType}');
+    }
+  }
+}

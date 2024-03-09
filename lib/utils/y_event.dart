@@ -1,18 +1,28 @@
 import 'package:ydart/structs/abstract_struct.dart';
 import 'package:ydart/types/abstract_type.dart';
 import 'package:ydart/utils/transaction.dart';
-
 import '../structs/item.dart';
+
+enum ChangeAction { add, update, delete }
+
+class ChangeKey {
+  ChangeAction action;
+  Object oldValue;
+
+  ChangeKey(this.action, this.oldValue);
+}
 
 class ChangesCollection {
   Set<Item>? added;
   Set<Item>? deleted;
   List<Delta>? delta;
+  Map<String, ChangeKey>? keys;
 
   ChangesCollection({
     this.added,
     this.deleted,
     this.delta,
+    this.keys,
   });
 }
 
@@ -32,46 +42,45 @@ class Delta {
 
 class YEvent {
   ChangesCollection? _changes;
+  AbstractType target;
+  late AbstractType currentTarget;
+  Transaction transaction;
 
-  YEvent(AbstractType target, Transaction transaction) {
-    Target = target;
-    CurrentTarget = target;
-    Transaction = transaction;
+  YEvent(this.target, this.transaction) {
+    currentTarget = target;
   }
 
-  AbstractType Target;
-  AbstractType CurrentTarget;
-  Transaction Transaction;
+  List<Object> get path => getPathTo(currentTarget, target);
 
-  List<Object> get Path => GetPathTo(CurrentTarget, Target);
-  ChangesCollection get Changes => CollectChanges();
+  ChangesCollection get changes => collectChanges();
 
-  bool Deletes(AbstractStruct str) {
-    return Transaction.DeleteSet.IsDeleted(str.Id);
+  bool deletes(AbstractStruct str) {
+    return transaction.deleteSet.isDeleted(str.id);
   }
 
-  bool Adds(AbstractStruct str) {
-    return !Transaction.BeforeState.containsKey(str.Id.Client) || str.Id.Clock >= Transaction.BeforeState[str.Id.Client];
+  bool adds(AbstractStruct str) {
+    return !transaction.beforeState.containsKey(str.id.client) ||
+        str.id.clock >= transaction.beforeState[str.id.client]!;
   }
 
-  ChangesCollection CollectChanges() {
+  ChangesCollection collectChanges() {
     if (_changes == null) {
-      var target = Target;
-      var added = Set<Item>();
-      var deleted = Set<Item>();
-      var delta = List<Delta>();
-      var keys = Map<String, ChangeKey>();
+      var target = this.target;
+      var added = <Item>{};
+      var deleted = <Item>{};
+      var delta = <Delta>[];
+      var keys = <String, ChangeKey>{};
 
       _changes = ChangesCollection()
-        ..Added = added
-        ..Deleted = deleted
-        ..Delta = delta
-        ..Keys = keys;
+        ..added = added
+        ..deleted = deleted
+        ..delta = delta
+        ..keys = keys;
 
-      var changed = Transaction.Changed[Target];
+      var changed = transaction.changed[target];
       if (changed == null) {
-        changed = HashSet<String>();
-        Transaction.Changed[Target] = changed;
+        changed = <String>{};
+        transaction.changed[target] = changed;
       }
 
       if (changed.contains(null)) {
@@ -83,108 +92,109 @@ class YEvent {
           }
         }
 
-        for (var item = Target._start; item != null; item = item.Right as Item) {
-          if (item.Deleted) {
-            if (Deletes(item) && !Adds(item)) {
-              if (lastOp == null || lastOp!.Delete == null) {
+        for (var item = target.start;
+            item != null;
+            item = item.right as Item?) {
+          if (item.deleted) {
+            if (deletes(item) && !adds(item)) {
+              if (lastOp == null || lastOp!.delete == null) {
                 packOp();
-                lastOp = Delta()..Delete = 0;
+                lastOp = Delta()..delete = 0;
               }
 
-              lastOp!.Delete! += item.Length;
+              lastOp.delete = lastOp.delete! + item.length;
               deleted.add(item);
             }
           } else {
-            if (Adds(item)) {
-              if (lastOp == null || lastOp!.Insert == null) {
+            if (adds(item)) {
+              if (lastOp == null || lastOp.insert == null) {
                 packOp();
-                lastOp = Delta()..Insert = <Object>[];
+                lastOp = Delta()..insert = <Object?>[];
               }
 
-              (lastOp!.Insert as List<Object>).addAll(item.Content.GetContent());
+              (lastOp.insert as List<Object?>)
+                  .addAll(item.content.getContent());
               added.add(item);
             } else {
-              if (lastOp == null || lastOp!.Retain == null) {
+              if (lastOp == null || lastOp.retain == null) {
                 packOp();
-                lastOp = Delta()..Retain = 0;
+                lastOp = Delta()..retain = 0;
               }
 
-              lastOp!.Retain! += item.Length;
+              lastOp.retain = lastOp.retain! + item.length;
             }
           }
         }
 
-        if (lastOp != null && lastOp!.Retain == null) {
+        if (lastOp != null && lastOp.retain == null) {
           packOp();
         }
       }
 
       for (var key in changed) {
-        if (key != null) {
-          ChangeAction action;
-          dynamic oldValue;
-          var item = target._map[key];
+        ChangeAction action;
+        dynamic oldValue;
+        var item = target.map[key];
 
-          if (Adds(item)) {
-            var prev = item.Left;
-            while (prev != null && Adds(prev)) {
-              prev = prev!.Left;
-            }
+        if (adds(item as AbstractStruct)) {
+          var prev = item?.left as Item?;
+          while (prev != null && adds(prev)) {
+            prev = prev.left as Item?;
+          }
 
-            if (Deletes(item)) {
-              if (prev != null && Deletes(prev)) {
-                action = ChangeAction.Delete;
-                oldValue = (prev as Item).Content.GetContent().last;
-              } else {
-                break;
-              }
-            } else {
-              if (prev != null && Deletes(prev)) {
-                action = ChangeAction.Update;
-                oldValue = (prev as Item).Content.GetContent().last;
-              } else {
-                action = ChangeAction.Add;
-                oldValue = null;
-              }
-            }
-          } else {
-            if (Deletes(item)) {
-              action = ChangeAction.Delete;
-              oldValue = item.Content.GetContent().last;
+          if (deletes(item!)) {
+            if (prev != null && deletes(prev)) {
+              action = ChangeAction.delete;
+              oldValue = (prev).content.getContent().last;
             } else {
               break;
             }
+          } else {
+            if (prev != null && deletes(prev)) {
+              action = ChangeAction.update;
+              oldValue = (prev).content.getContent().last;
+            } else {
+              action = ChangeAction.add;
+              oldValue = null;
+            }
           }
-
-          keys[key] = ChangeKey()..Action = action..OldValue = oldValue;
+        } else {
+          if (deletes(item as AbstractStruct)) {
+            action = ChangeAction.delete;
+            oldValue = item?.content.getContent().last;
+          } else {
+            break;
+          }
         }
+
+        keys[key] = ChangeKey(action,oldValue);
       }
     }
 
     return _changes!;
   }
 
-  List<Object> GetPathTo(AbstractType parent, AbstractType child) {
-    var path = List<Object>();
+  List<Object> getPathTo(AbstractType parent, AbstractType child) {
+    var path = <Object>[];
 
-    while (child._item != null && child != parent) {
-      if (child._item.ParentSub != null && child._item.ParentSub!.isNotEmpty) {
-        path.add(child._item.ParentSub);
+    while (child.item != null && child != parent) {
+      if (child.item?.parentSub != null && child.item!.parentSub!.isNotEmpty) {
+        path.add(child.item!.parentSub!);
       } else {
         int i = 0;
-        AbstractStruct? c = child._item.Parent as AbstractType?._start;
-        while (c != child._item && c != null) {
-          if (!c.Deleted) {
+        AbstractStruct? c = (child.item?.parent as AbstractType?)?.start;
+        while (c != child.item && c != null) {
+          if (!c.deleted) {
             i++;
           }
 
-          c = (c as Item?)?.Right;
+          c = (c as Item?)?.right;
         }
 
         path.add(i);
       }
 
-      child = child._item.Parent as AbstractType;
+      child = (child.item?.parent as AbstractType);
     }
 
     return path.reversed.toList();

@@ -1,24 +1,44 @@
 import 'dart:io';
+import 'dart:typed_data';
 
-abstract class IDSDecoder implements IDisposable {
-  Stream get reader;
+import 'package:ydart/lib0/byte_input_stream.dart';
+
+import 'id.dart';
+
+abstract class IDSDecoder {
+  ByteArrayInputStream reader;
+
+  IDSDecoder(this.reader);
 
   void resetDsCurVal();
+
   int readDsClock();
+
   int readDsLength();
 }
 
 abstract class IUpdateDecoder implements IDSDecoder {
   ID readLeftId();
+
   ID readRightId();
+
   int readClient();
+
   int readInfo();
+
   String readString();
+
   bool readParentInfo();
+
   int readTypeRef();
+
   int readLength();
+
   dynamic readAny();
-  List<int> readBuffer();
+
+   Uint8List readBuffer();
+
   String readKey();
+
   dynamic readJson();
 }
