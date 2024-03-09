@@ -181,7 +181,8 @@ class YDoc {
 
   void applyUpdateV2(Uint8List update,
       {Object? transactionOrigin, bool local = false}) {
-    applyUpdateV2(update, transactionOrigin: transactionOrigin, local: local);
+    applyUpdateV2FromStream(ByteArrayInputStream(update),
+        transactionOrigin: transactionOrigin, local: local);
   }
 
   Uint8List encodeStateAsUpdateV2([Uint8List? encodedTargetStateVector]) {

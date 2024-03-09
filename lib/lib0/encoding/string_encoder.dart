@@ -1,6 +1,8 @@
 ﻿import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:ydart/lib0/byte_output_stream.dart';
+
 import 'IEncoder.dart';
 import 'uint_opt_rle_encoder.dart';
 
@@ -32,12 +34,11 @@ class StringEncoder implements IEncoder<String> {
 
   @override
   Uint8List toArray() {
-    var byteData = utf8.encode(_sb.toString());
+    var output = ByteArrayOutputStream();
+    output.writeVarString(_sb.toString());
     var lengthData = _lengthEncoder.getBuffer();
-    var result = Uint8List(byteData.length + lengthData.length);
-    result.setAll(0, byteData);
-    result.setAll(byteData.length, lengthData);
-    return result;
+    output.writeBuffer(lengthData, 0, lengthData.length);
+    return output.toByteArray();
   }
 
   void _dispose(bool disposing) {

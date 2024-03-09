@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:ydart/lib0/constans.dart';
+
 class ByteArrayInputStream {
   late Uint8List buf;
   late int pos;
@@ -118,20 +120,20 @@ extension StreamDecodingExtensions on ByteArrayInputStream {
 
   int readVarInt() {
     int r = readByte();
-    int num = r & 0x3F;
+    int num = r & Bits.bits6;
     int len = 6;
-    int sign = (r & 0x80) > 0 ? -1 : 1;
+    int sign = (r & Bit.bit7) > 0 ? -1 : 1;
 
-    if ((r & 0x40) == 0) {
+    if ((r & Bit.bit8) == 0) {
       return sign * num;
     }
 
     while (true) {
       r = readByte();
-      num |= (r & 0x7F) << len;
+      num |= (r & Bits.bits7) << len;
       len += 7;
 
-      if (r < 0x80) {
+      if (r < Bit.bit8) {
         return sign * num;
       }
 

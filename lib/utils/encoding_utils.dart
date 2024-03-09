@@ -71,38 +71,36 @@ class EncodingUtils {
         .writeVarUint((structs.length - startNewStructs).toUnsigned(32));
     encoder.writeClient(client);
     encoder.restWriter.writeVarUint(clock.toUnsigned(32));
-
-    structs[startNewStructs]
-        .write(encoder, clock - structs[startNewStructs].id.clock);
-
+    var firstStruct = structs[startNewStructs];
+    firstStruct.write(encoder, clock - firstStruct.id.clock);
     for (int i = startNewStructs + 1; i < structs.length; i++) {
       structs[i].write(encoder, 0);
     }
   }
 
   static void writeClientsStructs(
-      IUpdateEncoder encoder, StructStore store, Map<int, int> sm) {
-    var filteredSm = <int, int>{};
-    sm.forEach((client, clock) {
+      IUpdateEncoder encoder, StructStore store, Map<int, int> _sm) {
+    var sm = <int, int>{};
+    _sm.forEach((client, clock) {
       if (store.getState(client) > clock) {
-        filteredSm[client] = clock;
+        sm[client] = clock;
       }
     });
 
     store.getStateVector().forEach((client, _) {
-      if (!sm.containsKey(client)) {
-        filteredSm[client] = 0;
+      if (!_sm.containsKey(client)) {
+        sm[client] = 0;
       }
     });
 
-    encoder.restWriter.writeVarUint(filteredSm.length.toUnsigned(32));
+    encoder.restWriter.writeVarUint(sm.length.toUnsigned(32));
 
-    var sortedClients = filteredSm.keys.toList()
+    var sortedClients = sm.keys.toList()
       ..sort((a, b) => b.compareTo(a));
 
     sortedClients.forEach((client) {
       writeStructs(
-          encoder, store.clients[client]!, client, filteredSm[client]!);
+          encoder, store.clients[client]!, client, sm[client]!);
     });
   }
 
@@ -111,11 +109,11 @@ class EncodingUtils {
     var clientRefs = <int, List<AbstractStruct>>{};
     var numOfStateUpdates = decoder.reader.readVarUint();
     for (var i = 0; i < numOfStateUpdates; i++) {
-      var numberOfStructs = decoder.reader.readVarUint().toInt();
+      var numberOfStructs = decoder.reader.readVarUint();
       assert(numberOfStructs >= 0);
       var refs = <AbstractStruct>[];
       var client = decoder.readClient();
-      var clock = decoder.reader.readVarUint().toInt();
+      var clock = decoder.reader.readVarUint();
       clientRefs[client] = refs;
       for (var j = 0; j < numberOfStructs; j++) {
         var info = decoder.readInfo();

@@ -18,10 +18,10 @@ class UintOptRleDecoder extends AbstractStreamDecoder<int> {
       var value = stream.readVarInt();
       bool isNegative = value < 0;
       if (isNegative) {
-        _state = -value;
+        _state = (-value).toUnsigned(32);
         _count = stream.readVarUint() + 2;
       } else {
-        _state = value;
+        _state = value.toUnsigned(32);
         _count = 1;
       }
     }

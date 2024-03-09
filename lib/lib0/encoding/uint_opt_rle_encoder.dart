@@ -29,8 +29,10 @@ class UintOptRleEncoder extends AbstractStreamEncoder<int> {
     }
   }
 
+  @override
   void flush() {
     writeEncodedValue();
+    super.flush();
   }
 
   void writeEncodedValue() {

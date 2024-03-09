@@ -126,6 +126,9 @@ class Transaction {
           if (beforeClock != clock) {
             var structs = store.clients[client]!;
             var firstChangePos = StructStore.findIndexSS(structs, beforeClock);
+            if (firstChangePos < 1) {
+              firstChangePos = 1;
+            }
             for (var j = structs.length - 1; j >= firstChangePos; j--) {
               DeleteSet.tryToMergeWithLeft(structs, j);
             }
@@ -157,7 +160,7 @@ class Transaction {
         }
 
         doc.invokeAfterAllTransactions(transactionCleanups);
-
+        doc.invokeUpdateV2(transaction);
         if (transactionCleanups.length <= i + 1) {
           doc.transactionCleanups.clear();
         } else {

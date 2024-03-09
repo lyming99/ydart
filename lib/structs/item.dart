@@ -1,11 +1,9 @@
-import 'dart:js_interop_unsafe';
 
 import 'package:ydart/lib0/constans.dart';
 import 'package:ydart/structs/abstract_struct.dart';
 import 'package:ydart/structs/content_deleted.dart';
 import 'package:ydart/structs/gc.dart';
 import 'package:ydart/types/abstract_type.dart';
-import 'package:ydart/utils/encoding.dart';
 import 'package:ydart/utils/snapshot.dart';
 import 'package:ydart/utils/struct_store.dart';
 import 'package:ydart/utils/transaction.dart';

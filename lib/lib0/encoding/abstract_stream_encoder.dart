@@ -20,16 +20,16 @@ abstract class AbstractStreamEncoder<T> implements IEncoder<T> {
     void write(T value);
 
     Uint8List toArray() {
-        _flush();
+        flush();
         return stream.toByteArray();
     }
 
     Uint8List getBuffer() {
-        _flush();
+        flush();
         return stream.toByteArray();
     }
 
-    void _flush() {
+    void flush() {
         _checkDisposed();
     }
 
