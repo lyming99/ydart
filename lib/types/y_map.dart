@@ -1,5 +1,6 @@
 /// 完成1次review
 import 'package:ydart/types/abstract_type.dart';
+import 'package:ydart/utils/update_decoder.dart';
 
 import '../structs/item.dart';
 import '../utils/encoding.dart';
@@ -27,7 +28,7 @@ class YMap extends AbstractType {
   int get length => _prelimContent.length;
 
   Object? get(String key) {
-    return _prelimContent[key];
+    return tryTypeMapGet(key);
   }
 
   void set(String key, Object value) {
@@ -74,5 +75,19 @@ class YMap extends AbstractType {
   @override
   void write(IUpdateEncoder encoder) {
     encoder.writeTypeRef(yMapRefId);
+  }
+
+  @override
+  AbstractType internalCopy() {
+    return YMap();
+  }
+
+  static YMap read(IUpdateDecoder decoder) {
+    return YMap();
+  }
+
+  Map<String, Object?>? toJsonMap() {
+    return typeMapEnumerateValues()
+        .map((key, value) => MapEntry(key, contentToJsonValue(value)));
   }
 }

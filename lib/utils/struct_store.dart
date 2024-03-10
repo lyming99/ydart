@@ -39,7 +39,7 @@ class StructStore {
   Map<int, int> getStateVector() {
     var result = <int, int>{};
     for (var entry in clients.entries) {
-      var str = entry.value[entry.value.length - 1];
+      var str = entry.value.last;
       result[entry.key] = str.id.clock + str.length;
     }
     return result;
@@ -263,11 +263,7 @@ class StructStore {
 
       var client = decoder.reader.readVarUint();
       var numberOfDeletes = decoder.reader.readVarUint();
-
-      if (!clients.containsKey(client)) {
-        clients[client] = [];
-      }
-
+      var structs = clients[client] ?? [];
       var state = getState(client);
 
       for (int deleteIndex = 0; deleteIndex < numberOfDeletes; deleteIndex++) {
@@ -280,34 +276,36 @@ class StructStore {
 
           var index = findIndexSS(clients[client]!, clock);
 
-          var str = clients[client]![index];
+          var str = structs[index];
 
           if (!str.deleted && str.id.clock < clock) {
             var splitItem = (str as Item)
                 .splitItem(transaction, (clock - str.id.clock).toInt());
-            clients[client]!.insert(index + 1, splitItem);
+            structs.insert(index + 1, splitItem);
             index++;
           }
 
-          while (index < clients[client]!.length) {
-            str = clients[client]![index++];
-            if (str.id.clock < clockEnd) {
-              if (!str.deleted) {
-                if (clockEnd < str.id.clock + str.length) {
-                  var splitItem = (str as Item).splitItem(
-                      transaction, (clockEnd - str.id.clock).toInt());
-                  clients[client]!.insert(index, splitItem);
-                }
-
-                str.delete(transaction);
-              }
-            } else {
+          while (index < structs.length) {
+            str = structs[index++];
+            if (str.id.clock >= clockEnd) {
               break;
+            }
+            if (!str.deleted) {
+              if (clockEnd < str.id.clock + str.length) {
+                var splitItem = (str as Item)
+                    .splitItem(transaction, (clockEnd - str.id.clock).toInt());
+                structs.insert(index, splitItem);
+              }
+              str.delete(transaction);
             }
           }
         } else {
           unappliedDs.add(client, clock, clockEnd - clock);
         }
+      }
+
+      if (structs.isNotEmpty) {
+        clients[client] = structs;
       }
     }
 

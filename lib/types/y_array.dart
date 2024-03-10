@@ -1,5 +1,6 @@
 /// 完成1次review
 import 'package:ydart/types/y_array_base.dart';
+import 'package:ydart/utils/update_decoder.dart';
 import 'package:ydart/utils/y_event.dart';
 
 import '../structs/item.dart';
@@ -7,6 +8,7 @@ import '../utils/encoding.dart';
 import '../utils/transaction.dart';
 import '../utils/update_encoder.dart';
 import '../utils/y_doc.dart';
+import 'abstract_type.dart';
 
 const yArrayRefId = 0;
 
@@ -35,7 +37,7 @@ class YArray extends YArrayBase {
     encoder.writeTypeRef(yArrayRefId);
   }
 
-  static YArray read(AbstractDecoder decoder) {
+  static YArray read(IUpdateDecoder decoder) {
     return YArray();
   }
 
@@ -92,5 +94,29 @@ class YArray extends YArrayBase {
       }
     }
     return -1;
+  }
+
+  @override
+  AbstractType internalCopy() {
+    return YArray();
+  }
+
+  List<Object?> enumerateList() {
+    var result = <Object?>[];
+    var n = start;
+    while (n != null) {
+      if (n.countable && !n.deleted) {
+        var c = n.content.getContent();
+        for (var item in c) {
+          result.add(item);
+        }
+      }
+      n = n.right as Item?;
+    }
+    return result;
+  }
+
+  List<Object?> toJsonList() {
+    return enumerateList().map((e) => contentToJsonValue(e)).toList();
   }
 }

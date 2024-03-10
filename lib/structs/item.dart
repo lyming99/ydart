@@ -1,4 +1,3 @@
-
 import 'package:ydart/lib0/constans.dart';
 import 'package:ydart/structs/abstract_struct.dart';
 import 'package:ydart/structs/content_deleted.dart';
@@ -179,6 +178,7 @@ class Item extends AbstractStruct {
       markDeleted();
       transaction.deleteSet.add(id.client, id.clock, length);
       transaction.addChangedTypeToTransaction(parent, parentSub);
+      content.delete(transaction);
     }
   }
 
@@ -186,6 +186,11 @@ class Item extends AbstractStruct {
   void integrate(Transaction transaction, int offset) {
     if (offset > 0) {
       id = ID(client: id.client, clock: id.clock + offset);
+      left = transaction.doc.store.getItemCleanEnd(
+          transaction, ID(client: id.client, clock: id.clock - 1));
+      leftOrigin = (left as Item?)?.lastId;
+      content = content.splice(offset);
+      length -= offset;
     }
     if (parent == null) {
       GC(id: id, length: length).integrate(transaction, 0);

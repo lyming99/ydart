@@ -1,4 +1,5 @@
 import 'package:ydart/structs/base_content.dart';
+import 'package:ydart/types/y_array_base.dart';
 
 import '../utils/encoding.dart';
 import '../utils/struct_store.dart';
@@ -51,7 +52,7 @@ class ContentFormat extends IContentEx {
 
   @override
   void integrate(Transaction transaction, Item item) {
-    // TODO: implement integrate
+    (item.parent as YArrayBase?)?.clearSearchMarkers();
   }
 
   @override

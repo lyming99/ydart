@@ -30,7 +30,7 @@ class RelativePosition {
   }
 
   factory RelativePosition.fromTypeIndex(AbstractType type, int index,
-      {int assoc = 0}) {
+      [int assoc = 0]) {
     if (assoc < 0) {
       if (index == 0) {
         return RelativePosition.fromTypeItem(type, type.item?.id, assoc);

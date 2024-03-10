@@ -105,23 +105,35 @@ class ByteArrayOutputStream {
 
   void writeAny(dynamic o) {
     if (o is String) {
-      write(0x77);
+      write(119);
       writeVarString(o);
     } else if (o is bool) {
-      write(o ? 0x78 : 0x79);
+      write(o ? 120 : 121);
     } else if (o is double) {
-      // Handle double
+      write(123);
+      var data = ByteData(8);
+      data.setFloat64(0, o);
+      writeBytes(data.buffer.asUint8List());
     } else if (o is int) {
-      write(0x7D);
+      write(125);
       writeVarInt(o);
     } else if (o == null) {
-      write(0x7E);
-    } else if (o is List) {
-      // Handle List
+      write(126);
+    } else if (o is Iterable) {
+      write(117);
+      writeVarUint(o.length);
+      for (var item in o) {
+        writeAny(item);
+      }
     } else if (o is Map) {
-      // Handle Map
+      write(118);
+      writeVarUint(o.length);
+      o.forEach((key, value) {
+        writeVarString(key.toString());
+        writeAny(value);
+      });
     } else {
-      throw new UnsupportedError('Unsupported object type: ${o.runtimeType}');
+      throw UnimplementedError('Unsupported object type: ${o.runtimeType}');
     }
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:ydart/lib0/byte_input_stream.dart';
 import 'package:ydart/utils/id.dart';
 import 'package:ydart/utils/transaction.dart';
@@ -23,7 +25,7 @@ class DeleteSet {
     required this.clients,
   });
 
-  factory DeleteSet.createFromStore(StructStore store) {
+  factory DeleteSet.store(StructStore store) {
     return DeleteSet(clients: {})..createDeleteSetFromStructStore(store);
   }
 
@@ -73,6 +75,12 @@ class DeleteSet {
     return dis != null && findIndexSS(dis, id.clock) != null;
   }
 
+  void sortDeleteSet() {
+    clients.forEach((key, value) {
+      value.sort((a, b) => a.clock.compareTo(b.clock));
+    });
+  }
+
   void sortAndMergeDeleteSet() {
     clients.forEach((client, dels) {
       dels.sort((a, b) => a.clock.compareTo(b.clock));
@@ -95,7 +103,7 @@ class DeleteSet {
       }
 
       if (j < dels.length) {
-        dels.removeRange(j, dels.length - j);
+        dels.removeRange(j, dels.length);
       }
     });
   }
@@ -133,10 +141,10 @@ class DeleteSet {
 
       for (int di = deleteItems.length - 1; di >= 0; di--) {
         var deleteItem = deleteItems[di];
-        var mostRightIndexToCheck = structs.length - 1;
-        mostRightIndexToCheck = 1 +
+        var indexSs = 1 +
             StructStore.findIndexSS(
                 structs, deleteItem.clock + deleteItem.length - 1);
+        var mostRightIndexToCheck = min(structs.length - 1, indexSs);
         for (int si = mostRightIndexToCheck;
             si > 0 && structs[si].id.clock >= deleteItem.clock;
             si--) {

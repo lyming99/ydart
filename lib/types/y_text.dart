@@ -42,6 +42,7 @@ class YTextEvent extends YEvent {
   YTextEvent(
     super.target,
     super.transaction,
+    this.subs,
   );
 
   List<Delta> get delta {
@@ -498,11 +499,13 @@ class YText extends YArrayBase {
       _pending.add(() => insert(index, text, attributes));
       return;
     }
-    doc.transact((tr) {
-      var pos = findPosition(tr, index);
-      attributes ??= Map.from(pos.currentAttributes);
-      insertText(tr, pos, text, attributes);
-    });
+    doc.transact(
+      (tr) {
+        var pos = findPosition(tr, index);
+        attributes ??= Map.from(pos.currentAttributes);
+        insertText(tr, pos, text, attributes);
+      },
+    );
   }
 
   void insertEmbed(int index, Object embed, [Map<String, Object>? attributes]) {
@@ -589,7 +592,7 @@ class YText extends YArrayBase {
     return tryTypeMapGet(name);
   }
 
-  Map<String, Object>? getAttributes() {
+  Map<String, Object?>? getAttributes() {
     return typeMapEnumerateValues();
   }
 
@@ -602,6 +605,72 @@ class YText extends YArrayBase {
     _pending.clear();
   }
 
+  @override
+  void callObserver(Transaction transaction, Set<String> parentSubs) {
+    super.callObserver(transaction, parentSubs);
+    var evt = YTextEvent(this, transaction, parentSubs);
+    var doc = transaction.doc;
+    if (!transaction.local) {
+      var foundFormattingItem = false;
+      for (var kvp in transaction.afterState.entries) {
+        var client = kvp.key;
+        var afterClock = kvp.value;
+        var clock = transaction.beforeState[kvp.key] ?? 0;
+        if (afterClock == clock) {
+          continue;
+        }
+        transaction.doc.store.iterateStructs(
+          transaction,
+          doc.store.clients[client]!,
+          clock,
+          afterClock,
+          (item) {
+            if (item is Item) {
+              if (!item.deleted && item.content is ContentFormat) {
+                foundFormattingItem = true;
+                return false;
+              }
+            }
+            return true;
+          },
+        );
+        if (foundFormattingItem) {
+          break;
+        }
+      }
+      if (!foundFormattingItem) {
+        transaction.deleteSet.iterateDeletedStructs(
+          transaction,
+          (item) {
+            if (item is! Item) {
+              return true;
+            }
+            if (item.parent == this && item.content is ContentFormat) {
+              foundFormattingItem = true;
+              return false;
+            }
+            return true;
+          },
+        );
+      }
+      doc.transact((transaction) {
+        if (foundFormattingItem) {
+          cleanupFormatting();
+          return;
+        }
+        transaction.deleteSet.iterateDeletedStructs(
+          transaction,
+          (item) {
+            if (item is Item && item.parent == this) {
+              cleanupContextlessFormattingGap(transaction, item);
+            }
+            return true;
+          },
+        );
+      });
+    }
+    callTypeObservers(transaction, evt);
+  }
 
   ItemTextListPosition findPosition(Transaction transaction, int index) {
     var currentAttributes = <String, Object>{};
@@ -892,7 +961,7 @@ class YText extends YArrayBase {
     encoder.writeTypeRef(yTextRefId);
   }
 
-  static YText read(AbstractDecoder decoder) {
+  static YText read(IUpdateDecoder decoder) {
     return YText("");
   }
 

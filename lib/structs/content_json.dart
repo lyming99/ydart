@@ -38,7 +38,7 @@ class ContentJson extends IContentEx {
   @override
   IContentEx splice(int offset) {
     var right = ContentJson(content: content.sublist(offset));
-    content.removeRange(offset, content.length - offset);
+    content.removeRange(offset, content.length);
     return right;
   }
 

@@ -9,7 +9,7 @@ import '../utils/update_encoder.dart';
 import 'item.dart';
 
 class ContentDoc extends IContentEx {
-  YDoc doc;
+  YDoc? doc;
   YDocOptions docOptions = YDocOptions();
 
   ContentDoc(this.doc);
@@ -45,12 +45,20 @@ class ContentDoc extends IContentEx {
 
   @override
   void integrate(Transaction transaction, Item item) {
-    // TODO: implement integrate
+    doc!.item = item;
+    transaction.subdocsAdded.add(doc!);
+    if (doc!.shouldLoad) {
+      transaction.subdocsLoaded.add(doc!);
+    }
   }
 
   @override
   void delete(Transaction transaction) {
-    // TODO: implement delete
+    if (transaction.subdocsAdded.contains(doc)) {
+      transaction.subdocsAdded.remove(doc);
+    } else {
+      transaction.subdocsRemoved.add(doc!);
+    }
   }
 
   @override
@@ -58,7 +66,7 @@ class ContentDoc extends IContentEx {
 
   @override
   void write(IUpdateEncoder encoder, int offset) {
-    encoder.writeString(doc.guid);
+    encoder.writeString(doc!.guid);
     docOptions.write(encoder, offset);
   }
 
@@ -66,6 +74,6 @@ class ContentDoc extends IContentEx {
     var guid = decoder.readString();
     var opts = YDocOptions.read(decoder);
     opts.guid = guid;
-    return ContentDoc(YDoc( opts));
+    return ContentDoc(YDoc(opts));
   }
 }

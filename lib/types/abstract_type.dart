@@ -6,6 +6,9 @@ import 'package:ydart/structs/content_any.dart';
 import 'package:ydart/structs/content_binary.dart';
 import 'package:ydart/structs/content_doc.dart';
 import 'package:ydart/structs/content_type.dart';
+import 'package:ydart/types/y_array.dart';
+import 'package:ydart/types/y_map.dart';
+import 'package:ydart/types/y_text.dart';
 import 'package:ydart/utils/encoding.dart';
 import 'package:ydart/utils/id.dart';
 import 'package:ydart/utils/snapshot.dart';
@@ -81,12 +84,7 @@ class AbstractType {
       if (type.item == null) {
         break;
       }
-      var parent = type.item?.parent;
-      if (parent is AbstractType) {
-        type = parent;
-      } else {
-        break;
-      }
+      type = type.item!.parent as AbstractType;
     }
     invokeEventHandlers(evt, transaction);
   }
@@ -136,9 +134,13 @@ class AbstractType {
       content = ContentAny(content: [value]);
     }
     var newItem = Item(
-      id: ID(client: ownClientId, clock: doc.store.getState(ownClientId)),
+      id: ID(
+        client: ownClientId,
+        clock: doc.store.getState(ownClientId),
+      ),
       left: left,
       leftOrigin: left?.lastId,
+      parent: this,
       parentSub: key,
       content: content,
     );
@@ -155,8 +157,8 @@ class AbstractType {
 
   Object? typeMapGetSnapshot(String key, Snapshot snapshot) {
     var item = map[key];
-    while (
-        item != null && item.id.clock >= (snapshot.stateVector[item.id.client] ?? -1)) {
+    while (item != null &&
+        item.id.clock >= (snapshot.stateVector[item.id.client] ?? -1)) {
       item = item.left as Item?;
     }
     return item != null && item.isVisible(snapshot)
@@ -164,16 +166,31 @@ class AbstractType {
         : null;
   }
 
-  Map<String, Object> typeMapEnumerateValues() {
-    var result = <String, Object>{};
+  Map<String, Object?> typeMapEnumerateValues() {
+    var result = <String, Object?>{};
     for (var entry in map.entries) {
       var key = entry.key;
       var value = entry.value;
       if (entry.value.deleted) {
         continue;
       }
-      map[key] = value;
+      var lastItem = value.content.getContent().last;
+      result[key] = lastItem;
     }
     return result;
+  }
+
+  Object? contentToJsonValue(Object? lastItem) {
+    Object? child;
+    if (lastItem is YMap) {
+      child = lastItem.toJsonMap();
+    } else if (lastItem is YArray) {
+      child = lastItem.toJsonList();
+    } else if (lastItem is YText) {
+      child = lastItem.toString();
+    } else {
+      child = lastItem;
+    }
+    return child;
   }
 }

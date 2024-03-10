@@ -33,7 +33,9 @@ class ContentString extends IContentEx {
 
   @override
   IContentEx splice(int offset) {
-    return ContentString(content.substring(offset));
+    var right = content.substring(offset);
+    content = content.replaceRange(offset, null, "");
+    return ContentString(right);
   }
 
   @override

@@ -4,8 +4,10 @@ import 'dart:typed_data';
 import 'package:uuid/uuid.dart';
 import 'package:ydart/lib0/byte_input_stream.dart';
 import 'package:ydart/lib0/byte_output_stream.dart';
+import 'package:ydart/utils/snapshot.dart';
 import 'package:ydart/utils/struct_store.dart';
 
+import '../structs/content_doc.dart';
 import '../structs/item.dart';
 import '../types/abstract_type.dart';
 import '../types/y_array.dart';
@@ -78,7 +80,7 @@ class YDoc {
   Set<YDoc> subdocs;
   Item? item;
 
-  YDoc(YDocOptions? opts)
+  YDoc([YDocOptions? opts])
       : _opts = opts ?? YDocOptions(),
         transactionCleanups = [],
         clientId = generateNewClientId(),
@@ -189,7 +191,7 @@ class YDoc {
     var targetStateVector = encodedTargetStateVector != null
         ? EncodingUtils.decodeStateVector(encodedTargetStateVector)
         : <int, int>{};
-    var encoder = UpdateEncoderV2(ByteArrayOutputStream());
+    var encoder = UpdateEncoderV2(ByteArrayOutputStream(1024*1024));
     writeStateAsUpdate(encoder, targetStateVector);
     return encoder.toArray();
   }
@@ -203,24 +205,24 @@ class YDoc {
   void writeStateAsUpdate(
       IUpdateEncoder encoder, Map<int, int> targetStateVector) {
     EncodingUtils.writeClientsStructs(encoder, store, targetStateVector);
-    DeleteSet.createFromStore(store).write(encoder);
+    DeleteSet.store(store).write(encoder);
   }
 
   void writeStateVector(IDSEncoder encoder) {
     EncodingUtils.writeStateVector(encoder, store.getStateVector());
   }
 
-  List<Function(Transaction)> beforeObserverCalls = [];
+  List<Function(Transaction transaction)> beforeObserverCalls = [];
 
-  List<Function(Transaction)> beforeTransaction = [];
+  List<Function(Transaction transaction)> beforeTransaction = [];
 
-  List<Function(Transaction)> afterTransaction = [];
+  List<Function(Transaction transaction)> afterTransaction = [];
 
-  List<Function(Transaction)> afterTransactionCleanup = [];
+  List<Function(Transaction transaction)> afterTransactionCleanup = [];
 
   List<Function()> beforeAllTransactions = [];
 
-  List<Function(List<Transaction>)> afterAllTransactions = [];
+  List<Function(List<Transaction> transactions)> afterAllTransactions = [];
 
   List<Function(Uint8List data, Object? origin, Transaction transaction)>
       updateV2 = [];
@@ -307,5 +309,54 @@ class YDoc {
     }
 
     throw Exception();
+  }
+
+  Snapshot createSnapshot() => Snapshot(
+      deleteSet: DeleteSet.store(store), stateVector: store.getStateVector());
+
+  void load() {
+    var item = this.item;
+    if (item != null && !shouldLoad) {
+      (item.parent as AbstractType).doc?.transact((tr) {
+        tr.subdocsLoaded.add(this);
+      }, origin: null, local: true);
+    }
+    shouldLoad = true;
+  }
+
+  List<String> getSubdocGuids() {
+    return subdocs.map((e) => e.guid).toSet().toList();
+  }
+
+  void destroy() {
+    for (var sd in subdocs) {
+      sd.destroy();
+    }
+
+    var item = this.item;
+    if (item != null) {
+      this.item = null;
+      var content = item.content;
+      if (item.deleted) {
+        if (content is ContentDoc) {
+          content.doc = null;
+        }
+      } else {
+        var content = item.content as ContentDoc?;
+        var newOpts = content!.docOptions;
+        newOpts.guid = guid;
+
+        content.doc = YDoc(newOpts);
+        content.doc!.item = item;
+      }
+      (item.parent as AbstractType).doc!.transact((tr) {
+        if (!item.deleted && content is ContentDoc) {
+          tr.subdocsAdded.add(content.doc!);
+        }
+        tr.subdocsRemoved.add(this);
+      }, origin: null, local: true);
+    }
+
+    invokeDestroyed();
   }
 }

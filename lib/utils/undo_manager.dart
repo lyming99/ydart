@@ -26,6 +26,7 @@ class StackItem {
   late Map<int, int> afterState;
   late Map<String, Object> meta;
   late DeleteSet deleteSet;
+  late DeleteSet deletions;
 
   StackItem(this.deleteSet, this.beforeState, this.afterState) {
     meta = {};
@@ -35,7 +36,7 @@ class StackItem {
 class UndoManager {
   late List<AbstractType> _scope;
   late bool Function(Item) _deleteFilter;
-  late Set<Object> _trackedOrigins;
+  late Set<Object?> _trackedOrigins;
   late QueueStack<StackItem> _undoStack;
   late QueueStack<StackItem> _redoStack;
   late bool _undoing;
@@ -43,17 +44,19 @@ class UndoManager {
   late YDoc _doc;
   late DateTime _lastChange;
   late int _captureTimeout;
+  var ignoreRemoteMapChanges = false;
 
   List<Function(StackEventArgs)> stackItemAdded = [];
 
   List<Function(StackEventArgs)> stackItemPopped = [];
 
   factory UndoManager.create(AbstractType typeScope) {
-    return UndoManager([typeScope], 500, (Item it) => true, {});
+    return UndoManager([typeScope], 500, (Item it) => true, {null});
   }
 
   UndoManager(List<AbstractType> typeScopes, int captureTimeout,
-      bool Function(Item)? deleteFilter, Set<Object> trackedOrigins) {
+      bool Function(Item)? deleteFilter,
+      Set<Object?> trackedOrigins) {
     _scope = typeScopes;
     _deleteFilter = deleteFilter ?? ((Item it) => true);
     _trackedOrigins = trackedOrigins..add(this);
@@ -66,12 +69,16 @@ class UndoManager {
     _captureTimeout = captureTimeout;
 
     _doc.afterTransaction.add((transaction) {
+      var isChangeParentType = _scope.any(
+          (element) => transaction.changedParentTypes.containsKey(element));
+      var isTrackOrigins = _trackedOrigins.contains(transaction.origin);
+      var isOriginNull = transaction.origin == null;
       var hasType =
           _trackedOrigins.any((to) => transaction.origin.runtimeType == to);
-      if (!_scope.any(
-              (type) => transaction.changedParentTypes.containsKey(type)) ||
-          (!_trackedOrigins.contains(transaction.origin) &&
-              (transaction.origin == null || !hasType))) {
+      var flag1 = !isChangeParentType;
+      var flag2 = !isTrackOrigins && (isOriginNull || !hasType);
+
+      if (flag1 || flag2) {
         return;
       }
 
@@ -126,33 +133,58 @@ class UndoManager {
     _lastChange = DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  StackItem undo() {
+  StackItem? undo() {
     _undoing = true;
-    StackItem res;
-
+    StackItem? res;
     try {
       res = popStackItem(_undoStack, OperationType.undo);
     } finally {
       _undoing = false;
     }
-
     return res;
   }
 
-  StackItem redo() {
+  StackItem? redo() {
     _redoing = true;
-    StackItem res;
-
+    StackItem? res;
     try {
       res = popStackItem(_redoStack, OperationType.redo);
     } finally {
       _redoing = false;
     }
-
     return res;
   }
+  StackItem? popStackItem1(
+      QueueStack<StackItem> stack, OperationType eventType) {
+    StackItem? result;
+    Transaction? tr;
+    _doc.transact((transaction) {
+      while (stack.isNotEmpty && result == null) {
+         var store = _doc.store;
+         var stackItem = stack.pop();
+         var itemsToRedo = {};
+         var itemsToDelete = [];
+         stackItem.beforeState;
+         stackItem.deleteSet.iterateDeletedStructs(transaction, (type) => false)
+      }
 
-  StackItem popStackItem(QueueStack<StackItem> stack, OperationType eventType) {
+      transaction.changed.forEach((type, subProps) {
+        if (subProps.contains(null) && type is YArrayBase) {
+          type.clearSearchMarkers();
+        }
+      });
+    }, origin: this);
+
+    if (result != null) {
+      for (var element in stackItemPopped) {
+        element.call(StackEventArgs(
+            result!, eventType, tr!.changedParentTypes, tr!.origin));
+      }
+    }
+    return result;
+  }
+  StackItem? popStackItem(
+      QueueStack<StackItem> stack, OperationType eventType) {
     StackItem? result;
 
     Transaction? tr;
@@ -181,10 +213,10 @@ class UndoManager {
             }
 
             _doc.store.iterateStructs(transaction, structs, startClock, len,
-                (str) {
-              if (str is Item) {
-                if (str.redone != null) {
-                  var redoneResult = _doc.store.followRedone(str.id);
+                (it) {
+              if (it is Item) {
+                if (it.redone != null) {
+                  var redoneResult = _doc.store.followRedone(it.id);
                   var diff = redoneResult.diff;
                   var item = redoneResult.item;
 
@@ -199,12 +231,12 @@ class UndoManager {
                         transaction, ID.create(item.id.client, endClock));
                   }
 
-                  str = item;
+                  it = item;
                 }
 
-                if (!str.deleted &&
-                    _scope.any((type) => isParentOf(type, str as Item))) {
-                  itemsToDelete.add(str as Item);
+                if (!it.deleted &&
+                    _scope.any((type) => isParentOf(type, it as Item))) {
+                  itemsToDelete.add(it as Item);
                 }
               }
 
@@ -229,9 +261,9 @@ class UndoManager {
           return true;
         });
 
-        itemsToRedo.forEach((str) {
+        for (var str in itemsToRedo) {
           performedChange |= transaction.redoItem(str, itemsToRedo) != null;
-        });
+        }
 
         for (var i = itemsToDelete.length - 1; i >= 0; i--) {
           var item = itemsToDelete[i];
@@ -257,7 +289,7 @@ class UndoManager {
             result!, eventType, tr!.changedParentTypes, tr!.origin));
       }
     }
-    return result!;
+    return result;
   }
 
   bool isParentOf(AbstractType parent, Item child) {

@@ -161,6 +161,17 @@ class Transaction {
 
         doc.invokeAfterAllTransactions(transactionCleanups);
         doc.invokeUpdateV2(transaction);
+        for (var subDoc in transaction.subdocsAdded) {
+          doc.subdocs.add(subDoc);
+        }
+        for (var subDoc in transaction.subdocsRemoved) {
+          doc.subdocs.remove(subDoc);
+        }
+        doc.invokeSubdocsChanged(transaction.subdocsLoaded,
+            transaction.subdocsAdded, transaction.subdocsRemoved);
+        for (var subDoc in transaction.subdocsRemoved) {
+          subDoc.destroy();
+        }
         if (transactionCleanups.length <= i + 1) {
           doc.transactionCleanups.clear();
         } else {
@@ -168,6 +179,107 @@ class Transaction {
         }
       }
     }
+  }
+
+  AbstractStruct? redoItem1(
+      Item item, Set<Item> redoItems, DeleteSet itemsToDelete) {
+    var doc = this.doc;
+    var store = doc.store;
+    var ownClientId = doc.clientId;
+    var redone = item.redone;
+
+    if (redone != null) {
+      return store.getItemCleanStart(this, redone);
+    }
+
+    var parentItem = (item.parent as AbstractType?)?.item;
+    Item? left;
+    Item? right;
+    if (parentItem != null && parentItem.deleted) {
+      if (parentItem.redone == null && (!redoItems.contains(parentItem)) ||
+          redoItem1(parentItem, redoItems, itemsToDelete) == null) {
+        return null;
+      }
+      while (parentItem!.redone != null) {
+        parentItem = store.getItemCleanStart(this, parentItem.redone!) as Item?;
+      }
+    }
+    AbstractType? parentType = parentItem == null
+        ? (item.parent as AbstractType?)
+        : (parentItem.content as ContentType).type;
+    if (item.parentSub == null) {
+      left = item.left as Item?;
+      right = item;
+      while (left != null) {
+        Item? leftTrace = left;
+        while (leftTrace != null &&
+            ((leftTrace.parent as AbstractType).item != parentItem)) {
+          leftTrace = leftTrace.redone == null
+              ? null
+              : store.getItemCleanStart(this, leftTrace.redone!) as Item;
+        }
+        if (leftTrace != null &&
+            (leftTrace.parent as AbstractType).item == parentItem) {
+          left = leftTrace;
+          break;
+        }
+        left = left.left as Item?;
+      }
+      while (right != null) {
+        Item? rightTrace = right;
+        while (rightTrace != null &&
+            (rightTrace.parent as AbstractType).item != parentItem) {
+          rightTrace = rightTrace.redone == null
+              ? null
+              : store.getItemCleanStart(this, rightTrace.redone!) as Item;
+        }
+        if (rightTrace != null &&
+            (rightTrace.parent as AbstractType).item == parentItem) {
+          right = rightTrace;
+          break;
+        }
+        right = right.right as Item?;
+      }
+    } else {
+      // item.parentSub!=null
+      right = null;
+      if (item.right != null) {
+        left = item;
+        while (left != null &&
+            left.right != null &&
+            itemsToDelete.isDeleted(left.right!.id)) {
+          left = left.right as Item?;
+        }
+        while (left != null && left.redone != null) {
+          left = store.getItemCleanStart(this, left.redone!) as Item?;
+        }
+        if (left == null || (left.parent as AbstractType).item != parentItem) {
+          return null;
+        }
+        if (left.right != null) {
+          return null;
+        }
+      } else {
+        //item.right==null
+        left = parentType!.map[item.parentSub];
+      }
+    }
+    var nextClock = store.getState(ownClientId);
+    var nextId = ID(client: ownClientId, clock: nextClock);
+    var redoneItem = Item.create(
+      nextId,
+      left,
+      left?.lastId,
+      right,
+      right?.id,
+      parentType,
+      item.parentSub,
+      item.content.copy(),
+    );
+    item.redone=nextId;
+    redoneItem.keep=true;
+    redoneItem.integrate(this, 0);
+    return redoneItem;
   }
 
   AbstractStruct? redoItem(Item item, Set<Item> redoItems) {

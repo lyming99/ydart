@@ -46,7 +46,8 @@ class ContentDeleted extends IContentEx {
 
   @override
   void integrate(Transaction transaction, Item item) {
-    // TODO: implement integrate
+    transaction.deleteSet.add(item.id.client, item.id.clock, length);
+    item.markDeleted();
   }
 
   @override

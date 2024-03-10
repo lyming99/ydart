@@ -30,7 +30,8 @@ class DSEncoderV2 extends IDSEncoder {
   @override
   void writeDsClock(int clock) {
     int diff = clock - _dsCurVal;
-    assert(diff >= 0);
+    assert(diff > 0);
+    assert(diff != 0);
     _dsCurVal = clock;
     restWriter.writeVarUint(diff);
   }
@@ -52,8 +53,6 @@ class DSEncoderV2 extends IDSEncoder {
 
   void _dispose({required bool disposing}) {}
 }
-
-
 
 class UpdateEncoderV2 extends DSEncoderV2 implements IUpdateEncoder {
   late int _keyclock;
