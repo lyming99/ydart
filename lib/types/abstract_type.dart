@@ -104,8 +104,8 @@ class AbstractType {
         this, YEventArgs(event: event, transaction: transaction));
   }
 
-  void callDeepEventHandlerListeners(
-      List<YEvent> events, Transaction transaction) {
+  void callDeepEventHandlerListeners(List<YEvent> events,
+      Transaction transaction) {
     deepEventHandler?.call(
         this, YDeepEventArgs(events: events, transaction: transaction));
   }
@@ -129,6 +129,7 @@ class AbstractType {
     } else if (value is Uint8List) {
       content = ContentBinary(value);
     } else if (value is AbstractType) {
+      value.doc ??= doc;
       content = ContentType(value);
     } else {
       content = ContentAny(content: [value]);
@@ -150,7 +151,9 @@ class AbstractType {
   Object? tryTypeMapGet(String key) {
     var val = map[key];
     if (val != null && !val.deleted) {
-      return val.content.getContent()[val.length - 1];
+      var content = val.content;
+      var list = content.getContent();
+      return list.last;
     }
     return null;
   }
@@ -174,7 +177,9 @@ class AbstractType {
       if (entry.value.deleted) {
         continue;
       }
-      var lastItem = value.content.getContent().last;
+      var lastItem = value.content
+          .getContent()
+          .last;
       result[key] = lastItem;
     }
     return result;
@@ -192,5 +197,9 @@ class AbstractType {
       child = lastItem;
     }
     return child;
+  }
+
+  Object toJson() {
+    return contentToJsonValue(this)!;
   }
 }

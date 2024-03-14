@@ -41,7 +41,7 @@ class DeleteSet {
   }
 
   void iterateDeletedStructs(
-      Transaction transaction, bool Function(AbstractStruct type) fun) {
+      Transaction transaction, bool Function(AbstractStruct struct) fun) {
     for (var kvp in clients.entries) {
       var structs = transaction.doc.store.clients[kvp.key];
       for (var del in kvp.value) {
@@ -231,6 +231,9 @@ class DeleteSet {
 
       for (int i = 0; i < len; i++) {
         var item = dsItems[i];
+        if(item.length==0){
+          continue;
+        }
         encoder.writeDsClock(item.clock);
         encoder.writeDsLength(item.length);
       }

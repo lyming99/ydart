@@ -17,18 +17,29 @@ class StackEventArgs {
   final Map<AbstractType, List<YEvent>> changedParentTypes;
   final Object? origin;
 
-  StackEventArgs(
-      this.stackItem, this.type, this.changedParentTypes, this.origin);
+  StackEventArgs({
+    required this.stackItem,
+    required this.type,
+    required this.changedParentTypes,
+    required this.origin,
+  });
+
+  factory StackEventArgs.create(StackItem stackItem, OperationType type,
+      Map<AbstractType, List<YEvent>> changedParentTypes, Object? origin) {
+    return StackEventArgs(
+        stackItem: stackItem,
+        type: type,
+        changedParentTypes: changedParentTypes,
+        origin: origin);
+  }
 }
 
 class StackItem {
-  late Map<int, int> beforeState;
-  late Map<int, int> afterState;
   late Map<String, Object> meta;
-  late DeleteSet deleteSet;
   late DeleteSet deletions;
+  late DeleteSet insertions;
 
-  StackItem(this.deleteSet, this.beforeState, this.afterState) {
+  StackItem(this.deletions, this.insertions) {
     meta = {};
   }
 }
@@ -46,17 +57,23 @@ class UndoManager {
   late int _captureTimeout;
   var ignoreRemoteMapChanges = false;
 
+  StackItem? currStackItem;
+
   List<Function(StackEventArgs)> stackItemAdded = [];
 
+  List<Function(StackEventArgs)> stackItemUpdated = [];
+
   List<Function(StackEventArgs)> stackItemPopped = [];
+
+  List<Function(bool undoStackCleared, bool redoStackCleared)> stackCleared =
+      [];
 
   factory UndoManager.create(AbstractType typeScope) {
     return UndoManager([typeScope], 500, (Item it) => true, {null});
   }
 
   UndoManager(List<AbstractType> typeScopes, int captureTimeout,
-      bool Function(Item)? deleteFilter,
-      Set<Object?> trackedOrigins) {
+      bool Function(Item)? deleteFilter, Set<Object?> trackedOrigins) {
     _scope = typeScopes;
     _deleteFilter = deleteFilter ?? ((Item it) => true);
     _trackedOrigins = trackedOrigins..add(this);
@@ -67,66 +84,135 @@ class UndoManager {
     _doc = typeScopes[0].doc!;
     _lastChange = DateTime.fromMillisecondsSinceEpoch(0);
     _captureTimeout = captureTimeout;
+    _doc.afterTransaction.add(afterTransactionHandler);
+  }
 
-    _doc.afterTransaction.add((transaction) {
-      var isChangeParentType = _scope.any(
-          (element) => transaction.changedParentTypes.containsKey(element));
-      var isTrackOrigins = _trackedOrigins.contains(transaction.origin);
-      var isOriginNull = transaction.origin == null;
-      var hasType =
-          _trackedOrigins.any((to) => transaction.origin.runtimeType == to);
-      var flag1 = !isChangeParentType;
-      var flag2 = !isTrackOrigins && (isOriginNull || !hasType);
+  bool captureTransaction(Transaction transaction) {
+    // todo
+    return true;
+  }
 
-      if (flag1 || flag2) {
+  bool canUndo() {
+    return _undoStack.isNotEmpty;
+  }
+
+  bool canRedo() {
+    return _redoStack.isNotEmpty;
+  }
+
+  void clear([bool clearUndoStack = true, bool clearRedoStack = true]) {
+    if (clearRedoStack && canRedo() || clearRedoStack && canRedo()) {
+      _doc.transact((transaction) {
+        if (clearUndoStack) {
+          for (var item in _undoStack.queue) {
+            clearUndoManagerStackItem(transaction, item);
+          }
+          _undoStack.clear();
+        }
+        if (clearRedoStack) {
+          for (var item in _redoStack.queue) {
+            clearUndoManagerStackItem(transaction, item);
+          }
+          _redoStack.clear();
+        }
+        for (var element in stackCleared) {
+          element.call(clearUndoStack, clearRedoStack);
+        }
+      });
+    }
+  }
+
+  void clearUndoManagerStackItem(Transaction transaction, StackItem stackItem) {
+    stackItem.deletions.iterateDeletedStructs(transaction, (type) {
+      if (type is Item) {
+        if (_scope.any((element) => isParentOf(element, type))) {
+          type.keep = false;
+        }
+      }
+      return true;
+    });
+  }
+
+  void destroy() {
+    _trackedOrigins.remove(this);
+    _doc.afterTransaction.remove(afterTransactionHandler);
+  }
+
+  void afterTransactionHandler(Transaction transaction) {
+    if (!captureTransaction(transaction)) {
+      return;
+    }
+    var isChangeParentType = _scope
+        .any((element) => transaction.changedParentTypes.containsKey(element));
+    if (!isChangeParentType) {
+      return;
+    }
+    var isTrackOrigins = _trackedOrigins.contains(transaction.origin);
+    if (!isTrackOrigins) {
+      if (transaction.origin == null) {
         return;
       }
-
-      var undoing = _undoing;
-      var redoing = _redoing;
-      QueueStack stack = undoing ? _redoStack : _undoStack;
-
-      if (undoing) {
-        stopCapturing();
-      } else if (!redoing) {
-        _redoStack.clear();
+      var hasTrackedOrigin =
+          _trackedOrigins.any((to) => transaction.origin.runtimeType == to);
+      if (!hasTrackedOrigin) {
+        return;
       }
+    }
 
-      var beforeState = transaction.beforeState;
-      var afterState = transaction.afterState;
-
-      var now = DateTime.now();
-      if (now.difference(_lastChange).inMilliseconds < _captureTimeout &&
-          stack.isNotEmpty &&
-          !undoing &&
-          !redoing) {
-        var lastOp = stack.peek();
-        lastOp.deleteSet =
-            DeleteSet.merge([lastOp.deleteSet, transaction.deleteSet]);
-        lastOp.afterState = afterState;
-      } else {
-        var item = StackItem(transaction.deleteSet, beforeState, afterState);
-        stack.push(item);
+    var undoing = _undoing;
+    var redoing = _redoing;
+    QueueStack stack = undoing ? _redoStack : _undoStack;
+    if (undoing) {
+      stopCapturing();
+    } else if (!redoing) {
+      clear(false, true);
+    }
+    var insertions = DeleteSet(clients: {});
+    transaction.afterState.forEach((client, endClock) {
+      var startClock = transaction.beforeState[client] ?? 0;
+      var len = endClock - startClock;
+      if (len > 0) {
+        insertions.add(client, startClock, len);
       }
-
-      if (!undoing && !redoing) {
-        _lastChange = now;
-      }
-
-      transaction.deleteSet.iterateDeletedStructs(transaction, (str) {
-        if (str is Item && _scope.any((type) => isParentOf(type, str))) {
-          str.keepItemAndParents(true);
-        }
-        return true;
-      });
-      stackItemAdded.forEach((element) {
-        element.call(StackEventArgs(
-            stack.peek(),
-            undoing ? OperationType.redo : OperationType.undo,
-            transaction.changedParentTypes,
-            transaction.origin));
-      });
     });
+    var now = DateTime.now();
+    var didAdd = false;
+    if (now.difference(_lastChange).inMilliseconds < _captureTimeout &&
+        stack.isNotEmpty &&
+        !undoing &&
+        !redoing) {
+      var lastOp = stack.peek();
+      lastOp.deletions =
+          DeleteSet.merge([lastOp.deletions, transaction.deleteSet]);
+      lastOp.insertions = DeleteSet.merge([lastOp.insertions, insertions]);
+    } else {
+      stack.push(StackItem(transaction.deleteSet, insertions));
+      didAdd = true;
+    }
+    if (!undoing && !redoing) {
+      _lastChange = DateTime.now();
+    }
+    transaction.deleteSet.iterateDeletedStructs(transaction, (item) {
+      if (item is Item && _scope.any((element) => isParentOf(element, item))) {
+        item.keep = true;
+      }
+      return true;
+    });
+    var changeEvent = StackEventArgs(
+      stackItem: stack.peek(),
+      type: undoing ? OperationType.redo : OperationType.undo,
+      changedParentTypes: transaction.changedParentTypes,
+      origin: transaction.origin,
+    );
+    if (didAdd) {
+      for (var value in stackItemAdded) {
+        value.call(changeEvent);
+      }
+    } else {
+      for (var value in stackItemUpdated) {
+        value.call(changeEvent);
+      }
+    }
   }
 
   void stopCapturing() {
@@ -154,117 +240,54 @@ class UndoManager {
     }
     return res;
   }
-  StackItem? popStackItem1(
-      QueueStack<StackItem> stack, OperationType eventType) {
-    StackItem? result;
-    Transaction? tr;
-    _doc.transact((transaction) {
-      while (stack.isNotEmpty && result == null) {
-         var store = _doc.store;
-         var stackItem = stack.pop();
-         var itemsToRedo = {};
-         var itemsToDelete = [];
-         stackItem.beforeState;
-         stackItem.deleteSet.iterateDeletedStructs(transaction, (type) => false)
-      }
 
-      transaction.changed.forEach((type, subProps) {
-        if (subProps.contains(null) && type is YArrayBase) {
-          type.clearSearchMarkers();
-        }
-      });
-    }, origin: this);
-
-    if (result != null) {
-      for (var element in stackItemPopped) {
-        element.call(StackEventArgs(
-            result!, eventType, tr!.changedParentTypes, tr!.origin));
-      }
-    }
-    return result;
-  }
   StackItem? popStackItem(
       QueueStack<StackItem> stack, OperationType eventType) {
-    StackItem? result;
-
+    var doc = _doc;
+    var scope = _scope;
     Transaction? tr;
-
-    _doc.transact((transaction) {
-      tr = transaction;
-
-      while (stack.isNotEmpty && result == null) {
+    doc.transact((transaction) {
+      while (stack.isNotEmpty && currStackItem == null) {
+        var store = _doc.store;
         var stackItem = stack.pop();
-        var itemsToRedo = <Item>{};
+        var itemsToRedo = <Item>[];
         var itemsToDelete = <Item>[];
         var performedChange = false;
-
-        stackItem.afterState.forEach((client, endClock) {
-          var startClock = stackItem.beforeState[client] ?? 0;
-          var len = endClock - startClock;
-          var structs = _doc.store.clients[client]!;
-
-          if (startClock != endClock) {
-            _doc.store
-                .getItemCleanStart(transaction, ID.create(client, startClock));
-
-            if (endClock < _doc.store.getState(client)) {
-              _doc.store
-                  .getItemCleanStart(transaction, ID.create(client, endClock));
-            }
-
-            _doc.store.iterateStructs(transaction, structs, startClock, len,
-                (it) {
-              if (it is Item) {
-                if (it.redone != null) {
-                  var redoneResult = _doc.store.followRedone(it.id);
-                  var diff = redoneResult.diff;
-                  var item = redoneResult.item;
-
-                  if (diff > 0) {
-                    item = _doc.store.getItemCleanStart(transaction,
-                            ID.create(item!.id.client, item.id.clock + diff))
-                        as Item;
-                  }
-
-                  if (item!.length > len) {
-                    _doc.store.getItemCleanStart(
-                        transaction, ID.create(item.id.client, endClock));
-                  }
-
-                  it = item;
-                }
-
-                if (!it.deleted &&
-                    _scope.any((type) => isParentOf(type, it as Item))) {
-                  itemsToDelete.add(it as Item);
-                }
+        stackItem.insertions.iterateDeletedStructs(transaction, (struct) {
+          if (struct is Item) {
+            if (struct.redone != null) {
+              var follow = store.followRedone(struct.id);
+              var item = follow.item;
+              if (follow.diff > 0) {
+                item = store.getItemCleanStart(
+                    transaction,
+                    ID(
+                        client: item!.id.client,
+                        clock: item.id.clock + follow.diff));
               }
-
-              return true;
-            });
+              struct = item!;
+            }
+            if (!struct.deleted &&
+                scope.any((type) => isParentOf(type, struct as Item))) {
+              itemsToDelete.add(struct as Item);
+            }
           }
-        });
-
-        stackItem.deleteSet.iterateDeletedStructs(transaction, (str) {
-          var id = str.id;
-          var clock = id.clock;
-          var client = id.client;
-          var startClock = stackItem.beforeState[client] ?? 0;
-          var endClock = stackItem.afterState[client] ?? 0;
-
-          if (str is Item &&
-              _scope.any((type) => isParentOf(type, str)) &&
-              !(clock >= startClock && clock < endClock)) {
-            itemsToRedo.add(str);
-          }
-
           return true;
         });
-
-        for (var str in itemsToRedo) {
-          performedChange |= transaction.redoItem(str, itemsToRedo) != null;
+        stackItem.deletions.iterateDeletedStructs(transaction, (struct) {
+          if (struct is Item &&
+              scope.any((type) => isParentOf(type, struct)) &&
+              !stackItem.insertions.isDeleted(struct.id)) {
+            itemsToRedo.add(struct);
+          }
+          return true;
+        });
+        for (var struct in itemsToRedo) {
+          performedChange = transaction.redoItem1(
+                      struct, itemsToRedo, stackItem.insertions) !=
+                  null ||
+              performedChange;
         }
-
         for (var i = itemsToDelete.length - 1; i >= 0; i--) {
           var item = itemsToDelete[i];
           if (_deleteFilter(item)) {
@@ -272,24 +295,24 @@ class UndoManager {
             performedChange = true;
           }
         }
-
-        result = stackItem;
+        currStackItem = performedChange ? stackItem : null;
       }
-
       transaction.changed.forEach((type, subProps) {
         if (subProps.contains(null) && type is YArrayBase) {
           type.clearSearchMarkers();
         }
       });
+      tr = transaction;
     }, origin: this);
-
-    if (result != null) {
+    if (currStackItem != null) {
+      var changedParentTypes = tr!.changedParentTypes;
       for (var element in stackItemPopped) {
-        element.call(StackEventArgs(
-            result!, eventType, tr!.changedParentTypes, tr!.origin));
+        element.call(StackEventArgs.create(
+            currStackItem!, eventType, changedParentTypes, this));
       }
+      currStackItem = null;
     }
-    return result;
+    return currStackItem;
   }
 
   bool isParentOf(AbstractType parent, Item child) {

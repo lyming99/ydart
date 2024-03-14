@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:ydart/structs/content_embed.dart';
 import 'package:ydart/structs/content_format.dart';
 import 'package:ydart/structs/content_string.dart';
@@ -31,6 +33,33 @@ class YTextChangeAttributes {
     this.user,
     this.state,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'type': type?.index,
+      'user': user,
+      'state': state?.index,
+    };
+  }
+
+  factory YTextChangeAttributes.fromMap(dynamic map) {
+    var temp;
+    return YTextChangeAttributes(
+      type: null == (temp = map['type'])
+          ? null
+          : (temp is num
+              ? YTextChangeType.values[temp.toInt()]
+              : YTextChangeType.values[int.tryParse(temp) ?? 0]),
+      user: null == (temp = map['user'])
+          ? null
+          : (temp is num ? temp.toInt() : int.tryParse(temp)),
+      state: null == (temp = map['state'])
+          ? null
+          : (temp is num
+              ? YTextChangeType.values[temp.toInt()]
+              : YTextChangeType.values[int.tryParse(temp) ?? 0]),
+    );
+  }
 }
 
 class YTextEvent extends YEvent {
@@ -321,8 +350,14 @@ class ItemTextListPosition {
         1,
       );
       left.integrate(transaction, 0);
-
-      currentAttributes[kvp.key] = kvp.value;
+      if(kvp.key==null){
+        print("null");
+      }
+      if(kvp.value==null){
+        currentAttributes.remove(kvp.key);
+      }else {
+        currentAttributes[kvp.key] = kvp.value;
+      }
       YText.updateCurrentAttributes(
           currentAttributes, left.content as ContentFormat);
     }
@@ -356,7 +391,7 @@ class ItemTextListPosition {
 class YText extends YArrayBase {
   final List<Function> _pending = [];
 
-  YText(String text) {
+  YText([String text = ""]) {
     if (text.isNotEmpty) {
       _pending.add(() => insert(0, text));
     }
@@ -432,7 +467,7 @@ class YText extends YArrayBase {
       }
       var n = start;
       while (n != null) {
-        bool isSnapshotVisible = snapshot != null && n.isVisible(snapshot);
+        bool isSnapshotVisible = n.isVisible(snapshot);
         bool isPrevSnapshotVisible =
             prevSnapshot != null && n.isVisible(prevSnapshot);
         if (isSnapshotVisible || isPrevSnapshotVisible) {
@@ -490,7 +525,7 @@ class YText extends YArrayBase {
     return ops;
   }
 
-  void insert(int index, String text, [Map<String, Object>? attributes]) {
+  void insert(int index, String text, [Map<String, Object?>? attributes]) {
     if (text.isEmpty) {
       return;
     }
@@ -536,7 +571,7 @@ class YText extends YArrayBase {
     });
   }
 
-  void format(int index, int length, Map<String, Object> attributes) {
+  void format(int index, int length, Map<String, Object?> attributes) {
     if (length == 0) {
       return;
     }
@@ -738,7 +773,6 @@ class YText extends YArrayBase {
 
     // Insert content.
     var content = text is String ? ContentString(text) : ContentEmbed(text);
-    super.deepEventHandler;
     if (searchMarkers.length > 0) {
       searchMarkers.updateMarkerChanges(currPos.index, content.length);
     }

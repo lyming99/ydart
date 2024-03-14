@@ -23,13 +23,9 @@ class StringEncoder implements IEncoder<String> {
 
   @override
   void write(String value) {
+    value = Uri.encodeComponent(value);
     _sb.write(value);
     _lengthEncoder.write(value.length);
-  }
-
-  void writeChars(List<int> value, int offset, int count) {
-    _sb.write(String.fromCharCodes(value, offset, offset + count));
-    _lengthEncoder.write(count);
   }
 
   @override

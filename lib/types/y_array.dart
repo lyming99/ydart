@@ -1,4 +1,6 @@
 /// 完成1次review
+import 'dart:math';
+
 import 'package:ydart/types/y_array_base.dart';
 import 'package:ydart/utils/update_decoder.dart';
 import 'package:ydart/utils/y_event.dart';
@@ -24,7 +26,7 @@ class YArray extends YArrayBase {
   final List<Object> _prelimContent = [];
 
   @override
-  int get length => _prelimContent.length;
+  int get length => max(_prelimContent.length, super.length);
 
   @override
   void integrate(YDoc? doc, Item? item) {

@@ -22,7 +22,7 @@ class YMapEvent extends YEvent {
 }
 
 class YMap extends AbstractType {
-  final Map<String, Object> _prelimContent = {};
+  final Map<String, Object?> _prelimContent = {};
 
   @override
   int get length => _prelimContent.length;
@@ -31,7 +31,7 @@ class YMap extends AbstractType {
     return tryTypeMapGet(key);
   }
 
-  void set(String key, Object value) {
+  void set(String key, Object? value) {
     var doc = this.doc;
     if (doc != null) {
       doc.transact((tr) {

@@ -172,6 +172,10 @@ class YDoc {
     return share[name] as T;
   }
 
+  Object toJson() {
+    return share.map((key, value) => MapEntry(key, value.toJson()));
+  }
+
   void applyUpdateV2FromStream(ByteArrayInputStream input,
       {Object? transactionOrigin, bool local = false}) {
     transact((tr) {
@@ -191,7 +195,7 @@ class YDoc {
     var targetStateVector = encodedTargetStateVector != null
         ? EncodingUtils.decodeStateVector(encodedTargetStateVector)
         : <int, int>{};
-    var encoder = UpdateEncoderV2(ByteArrayOutputStream(1024*1024));
+    var encoder = UpdateEncoderV2(ByteArrayOutputStream(1024 * 1024));
     writeStateAsUpdate(encoder, targetStateVector);
     return encoder.toArray();
   }

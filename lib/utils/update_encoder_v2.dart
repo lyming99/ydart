@@ -30,8 +30,7 @@ class DSEncoderV2 extends IDSEncoder {
   @override
   void writeDsClock(int clock) {
     int diff = clock - _dsCurVal;
-    assert(diff > 0);
-    assert(diff != 0);
+    assert(diff >= 0);
     _dsCurVal = clock;
     restWriter.writeVarUint(diff);
   }

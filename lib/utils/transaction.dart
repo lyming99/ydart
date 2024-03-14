@@ -153,7 +153,6 @@ class Transaction {
         if (!transaction.local) {
           var afterClock = transaction.afterState[doc.clientId] ?? -1;
           var beforeClock = transaction.beforeState[doc.clientId] ?? -1;
-          // todo 这里为啥要创建行的clientId？
           if (afterClock != beforeClock) {
             doc.clientId = YDoc.generateNewClientId();
           }
@@ -182,7 +181,7 @@ class Transaction {
   }
 
   AbstractStruct? redoItem1(
-      Item item, Set<Item> redoItems, DeleteSet itemsToDelete) {
+      Item item, List<Item> redoItems, DeleteSet itemsToDelete) {
     var doc = this.doc;
     var store = doc.store;
     var ownClientId = doc.clientId;

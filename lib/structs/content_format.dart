@@ -1,5 +1,6 @@
 import 'package:ydart/structs/base_content.dart';
 import 'package:ydart/types/y_array_base.dart';
+import 'package:ydart/types/y_text.dart';
 
 import '../utils/encoding.dart';
 import '../utils/struct_store.dart';
@@ -10,7 +11,7 @@ import 'item.dart';
 
 class ContentFormat extends IContentEx {
   String key;
-  Object? value;
+  dynamic value;
 
   ContentFormat({
     required this.key,
@@ -64,12 +65,15 @@ class ContentFormat extends IContentEx {
   @override
   void write(IUpdateEncoder encoder, int offset) {
     encoder.writeKey(key);
-    encoder.writeJson(value);
+    encoder.writeJson(value?.toMap());
   }
 
   static ContentFormat read(IUpdateDecoder decoder) {
     var key = decoder.readKey();
     var value = decoder.readJson();
+    if (key == "ychange") {
+      value = YTextChangeAttributes.fromMap(value);
+    }
     return ContentFormat(key: key, value: value);
   }
 }

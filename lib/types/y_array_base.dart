@@ -277,7 +277,7 @@ class YArrayBase extends AbstractType {
         length -= n.length;
       }
 
-      n = n.right as Item;
+      n = n.right as Item?;
     }
 
     if (length > 0) {
