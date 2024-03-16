@@ -1,5 +1,6 @@
 import 'package:ydart/lib0/constans.dart';
 import 'package:ydart/structs/abstract_struct.dart';
+import 'package:ydart/structs/content_any.dart';
 import 'package:ydart/structs/content_deleted.dart';
 import 'package:ydart/structs/gc.dart';
 import 'package:ydart/types/abstract_type.dart';
@@ -28,8 +29,6 @@ extension _InfoEnum on int {
 }
 
 class Item extends AbstractStruct {
-  AbstractStruct? left;
-  AbstractStruct? right;
   ID? leftOrigin;
   ID? rightOrigin;
 
@@ -42,21 +41,22 @@ class Item extends AbstractStruct {
 
   Item({
     required super.id,
-    this.left,
+    AbstractStruct? left,
     this.leftOrigin,
-    this.right,
+    AbstractStruct? right,
     this.rightOrigin,
     this.parent,
     this.parentSub,
     required this.content,
     super.length = 1,
   }) {
+    this.left = left;
+    this.right = right;
     length = content.length;
     info = content.isCountable ? InfoEnum.countable : InfoEnum.zero;
   }
 
-  factory Item.create(
-      ID id,
+  factory Item.create(ID id,
       AbstractStruct? left,
       ID? leftOrigin,
       AbstractStruct? right,
@@ -217,19 +217,19 @@ class Item extends AbstractStruct {
       return;
     }
     if ((left == null && (right == null || (right as Item?)?.left != null)) ||
-        (left != null && (left as Item?)?.right != right)) {
+        (left != null && ((left as Item?)?.right) != right)) {
       var left = this.left;
       AbstractStruct? o;
       // Set 'o' to the first conflicting item.
       if (left != null) {
-        o = (left as Item?)?.right;
+        o = left.right;
       } else if (parentSub != null) {
-        o = (parent as AbstractType?)?.map[parentSub!];
-        while (o != null && (o as Item?)?.left != null) {
-          o = (o as Item).left;
+        o = (parent as AbstractType).map[parentSub!];
+        while (o != null && o.left != null) {
+          o = o.left;
         }
       } else {
-        o = (parent as AbstractType?)?.start;
+        o = (parent as AbstractType).start;
       }
 
       var conflictingItems = <AbstractStruct>{};
@@ -239,12 +239,12 @@ class Item extends AbstractStruct {
         itemsBeforeOrigin.add(o);
         conflictingItems.add(o);
 
-        if ((leftOrigin == (o as Item?)?.leftOrigin)) {
+        if ((leftOrigin == (o as Item).leftOrigin)) {
           // Case 1
           if (o.id.client < id.client) {
             left = o;
             conflictingItems.clear();
-          } else if ((rightOrigin == (o as Item?)?.rightOrigin)) {
+          } else if ((rightOrigin == o.rightOrigin)) {
             // This and 'o' are conflicting and point to the same integration points.
             // The id decides which item comes first.
             // Since this is to the left of 'o', we can break here.
@@ -254,59 +254,45 @@ class Item extends AbstractStruct {
           // If so, we will find it in the next iterations.
         }
         // Use 'Find' instead of 'GetItemCleanEnd', because we don't want / need to split items.
-        else if ((o as Item?)?.leftOrigin != null &&
-            itemsBeforeOrigin.contains(
-                transaction.doc.store.find((o as Item).leftOrigin!))) {
+        else if (o.leftOrigin != null &&
+            itemsBeforeOrigin
+                .contains(transaction.doc.store.getItem(o.leftOrigin!))) {
           // Case 2
           if (!conflictingItems
-              .contains(transaction.doc.store.find((o).leftOrigin!))) {
+              .contains(transaction.doc.store.getItem((o).leftOrigin!))) {
             left = o;
             conflictingItems.clear();
           }
         } else {
           break;
         }
-        o = (o as Item?)?.right;
+        o = o.right;
       }
 
       this.left = left;
     }
 
     // Reconnect left/right + update parent map/start if necessary.
-    if (this.left != null) {
-      if (this.left is Item) {
-        var leftItem = this.left as Item;
-        this.right = leftItem.right;
-        leftItem.right = this;
-      } else {
-        this.right = null;
-      }
+    if (left != null) {
+      var right = left!.right;
+      this.right = right;
+      left!.right = this;
     } else {
       AbstractStruct? r;
-
       if (parentSub != null) {
-        var parentMap = (parent as AbstractType?)?.map;
-        r = parentMap?[parentSub];
-        while (r != null && (r as Item?)?.left != null) {
-          r = (r as Item).left;
+        r = (parent as AbstractType).map[parentSub];
+        while (r != null && r.left != null) {
+          r = r.left;
         }
       } else {
-        var abstractTypeParent = parent;
-        if (abstractTypeParent is AbstractType) {
-          r = abstractTypeParent.start;
-          abstractTypeParent.start = this;
-        } else {
-          r = null;
-        }
+        r = (parent as AbstractType).start;
+        (parent as AbstractType).start = this;
       }
       right = r;
     }
 
     if (right != null) {
-      var rightItem = right;
-      if (rightItem is Item) {
-        rightItem.left = this;
-      }
+      right!.left = this;
     } else if (parentSub != null) {
       // Set as current parent value if right == null and this is parentSub.
       (parent as AbstractType).map[parentSub!] = this;
@@ -326,7 +312,7 @@ class Item extends AbstractStruct {
     transaction.addChangedTypeToTransaction(parent as AbstractType?, parentSub);
 
     if (((parent as AbstractType?)?.item != null &&
-            (parent as AbstractType).item!.deleted) ||
+        (parent as AbstractType).item!.deleted) ||
         (parentSub != null && right != null)) {
       // Delete if parent is deleted or if this is not the current attribute value of parent.
       delete(transaction);
@@ -346,18 +332,18 @@ class Item extends AbstractStruct {
         rightOrigin!.clock >= store.getState(rightOrigin!.client)) {
       return rightOrigin!.client;
     }
+
     var parentId = parent;
-    if ((parentId is ID) &&
+    if (parentId is ID &&
         id.client != parentId.client &&
         parentId.clock >= store.getState(parentId.client)) {
       return parentId.client;
     }
 
     // We have all missing ids, now find the items.
-
     if (leftOrigin != null) {
       left = store.getItemCleanEnd(transaction, leftOrigin!);
-      leftOrigin = (left as Item?)?.lastId;
+      leftOrigin = left is GC ? null : (left as Item).lastId;
     }
 
     if (rightOrigin != null) {
@@ -367,28 +353,34 @@ class Item extends AbstractStruct {
 
     if (left is GC || right is GC) {
       parent = null;
+      return null;
     }
-    var pid = parent;
     // Only set parent if this shouldn't be garbage collected.
     if (parent == null) {
-      var rightItem = right;
-      var leftItem = left;
-      if (rightItem is Item) {
-        parent = rightItem.parent;
-        parentSub = rightItem.parentSub;
-      } else if (leftItem is Item) {
-        parent = leftItem.parent;
-        parentSub = leftItem.parentSub;
+      if (left != null && left is Item) {
+        parent = (left as Item).parent;
+        parentSub = (left as Item).parentSub;
       }
-    } else if (pid is ID) {
-      var parentItem = store.find(pid);
+      if (right != null && right is Item) {
+        parent = (right as Item).parent;
+        parentSub = (right as Item).parentSub;
+      }
+      return null;
+    }
+    if (parent is ID) {
+      var pid = parent as ID;
+      var parentItem = store.getItem(pid);
       if (parentItem is GC) {
         parent = null;
       } else {
-        parent = ((parentItem as Item?)?.content as ContentType?)?.type;
+        var content = (parentItem as Item).content;
+        if (content is ContentType) {
+          parent = content.type;
+        } else {
+          parent = null;
+        }
       }
     }
-
     return null;
   }
 
@@ -431,9 +423,9 @@ class Item extends AbstractStruct {
     var rightOrigin = this.rightOrigin;
     var parentSub = this.parentSub;
     var info = (content.ref & Bits.bits5) |
-        (origin == null ? 0 : Bit.bit8) |
-        (rightOrigin == null ? 0 : Bit.bit7) |
-        (parentSub == null ? 0 : Bit.bit6);
+    (origin == null ? 0 : Bit.bit8) |
+    (rightOrigin == null ? 0 : Bit.bit7) |
+    (parentSub == null ? 0 : Bit.bit6);
     encoder.writeInfo(info);
     if (origin != null) {
       encoder.writeLeftId(origin);

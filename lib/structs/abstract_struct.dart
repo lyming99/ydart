@@ -9,6 +9,9 @@ abstract class AbstractStruct {
   ID id;
   int length;
 
+  AbstractStruct? left;
+  AbstractStruct? right;
+
   AbstractStruct({
     required this.id,
     required this.length,

@@ -19,7 +19,7 @@ class GC extends AbstractStruct {
 
   @override
   bool mergeWith(AbstractStruct right) {
-    if(right is! GC){
+    if (right is! GC) {
       return false;
     }
     length += right.length;

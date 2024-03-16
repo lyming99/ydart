@@ -124,29 +124,25 @@ class StructStore {
     if (midClock == clock) {
       return right;
     }
-
-    int midIndex = ((clock * right) / (midClock + mid.length - 1)).toInt();
+    var midIndex = ((clock / (midClock + mid.length - 1)).floor() * right);
     while (left <= right) {
       mid = structs[midIndex];
       midClock = mid.id.clock;
-
       if (midClock <= clock) {
         if (clock < midClock + mid.length) {
           return midIndex;
         }
-
         left = midIndex + 1;
       } else {
         right = midIndex - 1;
       }
-
       midIndex = (left + right) ~/ 2;
     }
 
     throw Exception('Unexpected');
   }
 
-  AbstractStruct find(ID id) {
+  AbstractStruct getItem(ID id) {
     var structs = clients[id.client];
     if (structs != null) {
       int index = findIndexSS(structs, id.clock);
@@ -246,7 +242,7 @@ class StructStore {
         nextId = ID.create(nextId!.client, nextId.clock + diff);
       }
 
-      item = find(nextId!);
+      item = getItem(nextId!);
       diff = (nextId.clock - item.id.clock);
       nextId = (item as Item?)?.redone;
     } while (nextId != null && item is Item);
@@ -346,7 +342,7 @@ class StructStore {
     }
   }
 
-  void resumeStructIntegration(Transaction transaction) {
+  void integrateStructs(Transaction transaction) {
     var stack = _pendingStack;
     var clientsStructRefs = _pendingClientStructRefs;
     if (clientsStructRefs.isEmpty) {
@@ -357,32 +353,28 @@ class StructStore {
     clientsStructRefsIds.sort();
 
     PendingClientStructRef? getNextStructTarget() {
-      var nextStructsTarget = clientsStructRefs[
-          clientsStructRefsIds[clientsStructRefsIds.length - 1]];
-
+      var nextStructsTarget = clientsStructRefs[clientsStructRefsIds.last];
       while (nextStructsTarget!.refs.length ==
           nextStructsTarget.nextReadOperation) {
         clientsStructRefsIds.removeLast();
         if (clientsStructRefsIds.isNotEmpty) {
-          nextStructsTarget = clientsStructRefs[
-              clientsStructRefsIds[clientsStructRefsIds.length - 1]];
+          nextStructsTarget = clientsStructRefs[clientsStructRefsIds.last];
         } else {
           _pendingClientStructRefs.clear();
           return null;
         }
       }
-
       return nextStructsTarget;
     }
 
     var curStructsTarget = getNextStructTarget();
-    if (curStructsTarget == null && stack.isNotEmpty) {
+    if (curStructsTarget == null) {
       return;
     }
 
     var stackHead = stack.isNotEmpty
         ? stack.pop()
-        : curStructsTarget!.refs[curStructsTarget.nextReadOperation++];
+        : curStructsTarget.refs[curStructsTarget.nextReadOperation++];
     var state = <int, int>{};
 
     while (true) {

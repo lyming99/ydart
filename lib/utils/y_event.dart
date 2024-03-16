@@ -7,7 +7,7 @@ enum ChangeAction { add, update, delete }
 
 class ChangeKey {
   ChangeAction action;
-  Object oldValue;
+  Object? oldValue;
 
   ChangeKey(this.action, this.oldValue);
 }
