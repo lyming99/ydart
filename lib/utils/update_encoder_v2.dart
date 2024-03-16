@@ -161,8 +161,7 @@ class UpdateEncoderV2 extends DSEncoderV2 implements IUpdateEncoder {
 
   @override
   void writeJson<T>(T any) {
-    var str = jsonEncode(any);
-    restWriter.writeVarString(str);
+    restWriter.writeAny(any);
   }
 
   @override

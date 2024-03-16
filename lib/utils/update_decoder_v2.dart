@@ -67,7 +67,7 @@ class UpdateDecoderV2 extends DSDecoderV2 implements IUpdateDecoder {
       : super(input, leaveOpen: leaveOpen) {
     _keys = [];
     // Read feature flag - currently unused.
-    input.readByte();
+    input.readVarUint();
     _keyClockDecoder = IntDiffOptRleDecoder(input.readVarUint8ArrayAsStream());
     _clientDecoder = UintOptRleDecoder(input.readVarUint8ArrayAsStream());
     _leftClockDecoder = IntDiffOptRleDecoder(input.readVarUint8ArrayAsStream());
@@ -159,8 +159,6 @@ class UpdateDecoderV2 extends DSDecoderV2 implements IUpdateDecoder {
   @override
   dynamic readJson() {
     checkDisposed();
-    var jsonString = reader.readVarString();
-    var result = json.decode(jsonString);
-    return result;
+    return reader.readAny();
   }
 }

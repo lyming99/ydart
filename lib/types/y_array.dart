@@ -95,7 +95,7 @@ class YArray extends YArrayBase {
         index -= item.length;
       }
     }
-    return -1;
+    return null;
   }
 
   @override

@@ -283,7 +283,7 @@ class UndoManager {
           return true;
         });
         for (var struct in itemsToRedo) {
-          performedChange = transaction.redoItem1(
+          performedChange = transaction.redoItem(
                       struct, itemsToRedo, stackItem.insertions) !=
                   null ||
               performedChange;

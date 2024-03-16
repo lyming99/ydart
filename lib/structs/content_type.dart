@@ -53,18 +53,20 @@ class ContentType extends IContentEx {
   @override
   void delete(Transaction transaction) {
     var item = type.start;
-    while(item != null){
-      if(item.deleted){
+    while (item != null) {
+      if (!item.deleted) {
         item.delete(transaction);
-      }else{
+      } else if (item.id.clock <
+          (transaction.beforeState[item.id.client] ?? 0)) {
         transaction.mergeStructs.add(item);
       }
       item = item.right as Item?;
     }
-    for(var valueItem in type.map.values){
-      if(!valueItem.deleted){
+    for (var valueItem in type.map.values) {
+      if (!valueItem.deleted) {
         valueItem.delete(transaction);
-      }else{
+      } else if (valueItem.id.clock <
+          (transaction.beforeState[valueItem.id.client] ?? 0)) {
         transaction.mergeStructs.add(valueItem);
       }
     }
@@ -74,14 +76,14 @@ class ContentType extends IContentEx {
   @override
   void gc(StructStore store) {
     var item = type.start;
-    while(item!=null){
-      item.gc(store,true);
+    while (item != null) {
+      item.gc(store, true);
       item = item.right as Item?;
     }
-    type.start=null;
-    for(var kvp in type.map.entries){
+    type.start = null;
+    for (var kvp in type.map.entries) {
       Item? valueItem = kvp.value;
-      while(valueItem!=null){
+      while (valueItem != null) {
         valueItem.gc(store, true);
         valueItem = valueItem.left as Item?;
       }
@@ -96,13 +98,13 @@ class ContentType extends IContentEx {
 
   static ContentType read(IUpdateDecoder decoder) {
     var typeRef = decoder.readTypeRef();
-    if(typeRef==yArrayRefId){
+    if (typeRef == yArrayRefId) {
       var arr = YArray.read(decoder);
       return ContentType(arr);
-    }else if(typeRef == yMapRefId){
+    } else if (typeRef == yMapRefId) {
       var map = YMap.read(decoder);
       return ContentType(map);
-    }else if(typeRef==yTextRefId){
+    } else if (typeRef == yTextRefId) {
       var text = YText.read(decoder);
       return ContentType(text);
     }

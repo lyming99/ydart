@@ -247,7 +247,7 @@ class StructStore {
       }
 
       item = find(nextId!);
-      diff = (nextId.clock - item.id.clock).toInt();
+      diff = (nextId.clock - item.id.clock);
       nextId = (item as Item?)?.redone;
     } while (nextId != null && item is Item);
 

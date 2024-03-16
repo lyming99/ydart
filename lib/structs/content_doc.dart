@@ -10,9 +10,20 @@ import 'item.dart';
 
 class ContentDoc extends IContentEx {
   YDoc? doc;
-  YDocOptions docOptions = YDocOptions();
+  late YDocOptions docOptions;
 
-  ContentDoc(this.doc);
+  ContentDoc(this.doc) {
+    docOptions = YDocOptions();
+    if (doc!.gc) {
+      docOptions.gc = false;
+    }
+    if (doc!.autoLoad) {
+      docOptions.autoLoad = true;
+    }
+    if (doc!.meta != null) {
+      docOptions.meta = doc!.meta;
+    }
+  }
 
   @override
   int get ref => 9;
@@ -30,6 +41,7 @@ class ContentDoc extends IContentEx {
 
   @override
   IContentEx copy() {
+    // todo 和yjs不一致
     return ContentDoc(doc);
   }
 

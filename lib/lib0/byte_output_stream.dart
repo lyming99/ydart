@@ -94,8 +94,11 @@ class ByteArrayOutputStream {
   }
 
   void writeVarString(String str) {
-    Uint8List data = utf8.encode(str);
-    writeVarUint8Array(data);
+    var value = Uri.encodeComponent(str);
+    writeVarUint(value.length);
+    for(var i=0;i<value.length;i++){
+      write(value.codeUnitAt(i));
+    }
   }
 
   void writeVarUint8Array(Uint8List array) {

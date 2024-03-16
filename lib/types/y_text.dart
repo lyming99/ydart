@@ -391,6 +391,8 @@ class ItemTextListPosition {
 class YText extends YArrayBase {
   final List<Function> _pending = [];
 
+  bool hasFormatting = false;
+
   YText([String text = ""]) {
     if (text.isNotEmpty) {
       _pending.add(() => insert(0, text));
@@ -1006,6 +1008,10 @@ class YText extends YArrayBase {
     } else {
       attributes[format.key] = format.value;
     }
+  }
+  @override
+  AbstractType internalCopy() {
+    return YText();
   }
 
   static bool equalAttrs(Object? curVal, Object? value) {

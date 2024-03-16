@@ -3,6 +3,7 @@ import 'package:ydart/structs/abstract_struct.dart';
 import 'package:ydart/structs/content_deleted.dart';
 import 'package:ydart/structs/gc.dart';
 import 'package:ydart/types/abstract_type.dart';
+import 'package:ydart/types/y_array_base.dart';
 import 'package:ydart/utils/snapshot.dart';
 import 'package:ydart/utils/struct_store.dart';
 import 'package:ydart/utils/transaction.dart';
@@ -113,8 +114,15 @@ class Item extends AbstractStruct {
     }
   }
 
+  void markDeleted() {
+    info |= InfoEnum.deleted;
+  }
+
   @override
-  bool get deleted => info.hasFlag(InfoEnum.deleted);
+  bool get deleted {
+    var result = info.hasFlag(InfoEnum.deleted);
+    return result;
+  }
 
   ID get lastId =>
       length == 1 ? id : ID.create(id.client, id.clock + length - 1);
@@ -135,37 +143,49 @@ class Item extends AbstractStruct {
     return n;
   }
 
-  void markDeleted() {
-    info |= InfoEnum.deleted;
-  }
-
   @override
   bool mergeWith(AbstractStruct right) {
-    var rightItem = right as Item?;
-
-    if ((rightItem?.leftOrigin == lastId) &&
+    if (right is Item &&
+        right.leftOrigin == lastId &&
         this.right == right &&
-        (rightItem?.rightOrigin == rightOrigin) &&
+        rightOrigin == right.rightOrigin &&
         id.client == right.id.client &&
         id.clock + length == right.id.clock &&
         deleted == right.deleted &&
         redone == null &&
-        rightItem?.redone == null &&
-        content.runtimeType == rightItem?.content.runtimeType &&
-        content.mergeWith(rightItem!.content)) {
-      if (rightItem.keep) {
+        right.redone == null &&
+        content.runtimeType == right.content.runtimeType &&
+        content.mergeWith(right.content)) {
+      var searchMark = getParentSearchMark();
+      if (searchMark != null) {
+        for (var marker in searchMark.searchMarkers) {
+          if (marker.p == right) {
+            marker.p = this;
+          }
+          if (!deleted && countable) {
+            marker.index -= length;
+          }
+        }
+      }
+      if (right.keep) {
         keep = true;
       }
-
-      this.right = rightItem.right;
-      if (this.right is Item) {
+      this.right = right.right;
+      if (this.right != null) {
         (this.right as Item).left = this;
       }
-      length += rightItem.length;
+      length += right.length;
       return true;
     }
-
     return false;
+  }
+
+  ArraySearchMarkerCollection? getParentSearchMark() {
+    var parent = this.parent;
+    if (parent is YArrayBase) {
+      return parent.searchMarkers;
+    }
+    return null;
   }
 
   @override
@@ -238,7 +258,6 @@ class Item extends AbstractStruct {
             itemsBeforeOrigin.contains(
                 transaction.doc.store.find((o as Item).leftOrigin!))) {
           // Case 2
-          // TODO: Store.Find is called twice here, call once?
           if (!conflictingItems
               .contains(transaction.doc.store.find((o).leftOrigin!))) {
             left = o;
@@ -247,7 +266,6 @@ class Item extends AbstractStruct {
         } else {
           break;
         }
-
         o = (o as Item?)?.right;
       }
 
@@ -281,7 +299,6 @@ class Item extends AbstractStruct {
           r = null;
         }
       }
-
       right = r;
     }
 
@@ -425,15 +442,25 @@ class Item extends AbstractStruct {
       encoder.writeRightId(rightOrigin);
     }
     if (origin == null && rightOrigin == null) {
-      var parent = this.parent as AbstractType;
-      var parentItem = parent.item;
-      if (parentItem == null) {
-        var yKey = parent.findRootTypeKey();
+      var parent = this.parent;
+      if (parent is AbstractType) {
+        var parentItem = parent.item;
+        if (parentItem == null) {
+          var yKey = parent.findRootTypeKey();
+          encoder.writeParentInfo(true);
+          encoder.writeString(yKey);
+        } else {
+          encoder.writeParentInfo(false);
+          encoder.writeLeftId(parentItem.id);
+        }
+      } else if (parent is String) {
         encoder.writeParentInfo(true);
-        encoder.writeString(yKey);
-      } else {
+        encoder.writeString(parent);
+      } else if (parent is ID) {
         encoder.writeParentInfo(false);
-        encoder.writeLeftId(parentItem.id);
+        encoder.writeLeftId(parent);
+      } else {
+        throw UnsupportedError("");
       }
       if (parentSub != null) {
         encoder.writeString(parentSub);

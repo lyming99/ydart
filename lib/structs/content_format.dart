@@ -2,7 +2,6 @@ import 'package:ydart/structs/base_content.dart';
 import 'package:ydart/types/y_array_base.dart';
 import 'package:ydart/types/y_text.dart';
 
-import '../utils/encoding.dart';
 import '../utils/struct_store.dart';
 import '../utils/transaction.dart';
 import '../utils/update_decoder.dart';
@@ -38,7 +37,7 @@ class ContentFormat extends IContentEx {
 
   @override
   List<Object?> getContent() {
-    throw UnimplementedError();
+    return [];
   }
 
   @override
@@ -53,7 +52,12 @@ class ContentFormat extends IContentEx {
 
   @override
   void integrate(Transaction transaction, Item item) {
-    (item.parent as YArrayBase?)?.clearSearchMarkers();
+    var parent = item.parent;
+    if (parent is! YText) {
+      return;
+    }
+    parent.clearSearchMarkers();
+    parent.hasFormatting = true;
   }
 
   @override
@@ -65,14 +69,18 @@ class ContentFormat extends IContentEx {
   @override
   void write(IUpdateEncoder encoder, int offset) {
     encoder.writeKey(key);
-    encoder.writeJson(value?.toMap());
+    if (key == "ychange") {
+      encoder.writeJson(value?.toMap());
+    } else {
+      encoder.writeJson(value);
+    }
   }
 
   static ContentFormat read(IUpdateDecoder decoder) {
-    var key = decoder.readKey();
+    var key = decoder.readString();
     var value = decoder.readJson();
     if (key == "ychange") {
-      value = YTextChangeAttributes.fromMap(value);
+      value = value == null ? null : YTextChangeAttributes.fromMap(value);
     }
     return ContentFormat(key: key, value: value);
   }

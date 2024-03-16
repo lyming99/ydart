@@ -183,5 +183,4 @@ class EncodingUtils {
   static Map<int, int> decodeStateVector(Uint8List input) {
     return readStateVector(DSDecoderV2(ByteArrayInputStream(input)));
   }
-
 }

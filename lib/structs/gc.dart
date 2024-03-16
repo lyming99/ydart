@@ -1,5 +1,4 @@
 import 'package:ydart/utils/id.dart';
-import 'package:ydart/utils/encoding.dart';
 import 'package:ydart/utils/struct_store.dart';
 import 'package:ydart/utils/transaction.dart';
 
@@ -20,6 +19,9 @@ class GC extends AbstractStruct {
 
   @override
   bool mergeWith(AbstractStruct right) {
+    if(right is! GC){
+      return false;
+    }
     length += right.length;
     return true;
   }

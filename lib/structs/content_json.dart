@@ -46,6 +46,7 @@ class ContentJson extends IContentEx {
   bool mergeWith(IContent right) {
     if (right is ContentJson) {
       content.addAll(right.content);
+      return true;
     }
     return false;
   }

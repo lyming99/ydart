@@ -117,12 +117,9 @@ class Transaction {
         if (doc.gc) {
           ds.tryGcDeleteSet(store, doc.gcFilter);
         }
-
         ds.tryMergeDeleteSet(store);
-
         transaction.afterState.forEach((client, clock) {
           var beforeClock = transaction.beforeState[client] ?? 0;
-
           if (beforeClock != clock) {
             var structs = store.clients[client]!;
             var firstChangePos = StructStore.findIndexSS(structs, beforeClock);
@@ -180,7 +177,7 @@ class Transaction {
     }
   }
 
-  AbstractStruct? redoItem1(
+  AbstractStruct? redoItem(
       Item item, List<Item> redoItems, DeleteSet itemsToDelete) {
     var doc = this.doc;
     var store = doc.store;
@@ -196,7 +193,7 @@ class Transaction {
     Item? right;
     if (parentItem != null && parentItem.deleted) {
       if (parentItem.redone == null && (!redoItems.contains(parentItem)) ||
-          redoItem1(parentItem, redoItems, itemsToDelete) == null) {
+          redoItem(parentItem, redoItems, itemsToDelete) == null) {
         return null;
       }
       while (parentItem!.redone != null) {
@@ -278,112 +275,6 @@ class Transaction {
     item.redone=nextId;
     redoneItem.keep=true;
     redoneItem.integrate(this, 0);
-    return redoneItem;
-  }
-
-  AbstractStruct? redoItem(Item item, Set<Item> redoItems) {
-    var doc = this.doc;
-    var store = doc.store;
-    var ownClientId = doc.clientId;
-    var redone = item.redone;
-
-    if (redone != null) {
-      return store.getItemCleanStart(this, redone);
-    }
-
-    var parentItem = (item.parent as AbstractType?)?.item;
-    AbstractStruct? left;
-    AbstractStruct? right;
-
-    if (item.parentSub == null) {
-      left = item.left;
-      right = item;
-    } else {
-      left = item;
-      while ((left as Item?)?.right != null) {
-        left = left!.right;
-        if (left?.id.client != ownClientId) {
-          return null;
-        }
-      }
-      if (left?.right != null) {
-        left = (item.parent as AbstractType?)?.map[item.parentSub];
-      }
-      right = null;
-    }
-
-    if (parentItem != null && parentItem.deleted && parentItem.redone == null) {
-      if (!redoItems.contains(parentItem) ||
-          redoItem(parentItem, redoItems) == null) {
-        return null;
-      }
-    }
-
-    if (parentItem != null && parentItem.redone != null) {
-      while (parentItem?.redone != null) {
-        parentItem = store.getItemCleanStart(this, parentItem!.redone!) as Item;
-      }
-
-      while (left != null) {
-        AbstractStruct? leftTrace = left;
-        while (leftTrace != null &&
-            ((leftTrace as Item).parent as AbstractType?)?.item != parentItem) {
-          leftTrace = leftTrace.redone == null
-              ? null
-              : store.getItemCleanStart(this, leftTrace.redone!);
-        }
-
-        if (leftTrace != null &&
-            ((leftTrace as Item).parent as AbstractType?)?.item == parentItem) {
-          left = leftTrace;
-          break;
-        }
-
-        left = (left as Item?)?.left;
-      }
-
-      while (right != null) {
-        AbstractStruct? rightTrace = right;
-        while (rightTrace != null &&
-            ((rightTrace as Item).parent as AbstractType?)?.item !=
-                parentItem) {
-          rightTrace = rightTrace.redone == null
-              ? null
-              : store.getItemCleanStart(this, rightTrace.redone!);
-        }
-
-        if (rightTrace != null &&
-            ((rightTrace as Item).parent as AbstractType?)?.item ==
-                parentItem) {
-          right = rightTrace;
-          break;
-        }
-
-        right = (right as Item).right;
-      }
-    }
-
-    var nextClock = store.getState(ownClientId);
-    var nextId = ID.create(ownClientId, nextClock);
-
-    var redoneItem = Item.create(
-      nextId,
-      left,
-      (left as Item?)?.lastId,
-      right,
-      right?.id,
-      parentItem == null
-          ? item.parent
-          : (parentItem.content as ContentType?)?.type,
-      item.parentSub,
-      item.content.copy(),
-    );
-
-    item.redone = nextId;
-
-    redoneItem.keepItemAndParents(true);
-    redoneItem.integrate(this, 0);
-
     return redoneItem;
   }
 

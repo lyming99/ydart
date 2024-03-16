@@ -23,7 +23,6 @@ class StringEncoder implements IEncoder<String> {
 
   @override
   void write(String value) {
-    value = Uri.encodeComponent(value);
     _sb.write(value);
     _lengthEncoder.write(value.length);
   }

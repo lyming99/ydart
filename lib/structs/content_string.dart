@@ -35,6 +35,11 @@ class ContentString extends IContentEx {
   IContentEx splice(int offset) {
     var right = content.substring(offset);
     content = content.replaceRange(offset, null, "");
+    var firstCharCode = content.codeUnitAt(offset - 1);
+    if (firstCharCode >= 0xd800 && firstCharCode <= 0xd8ff) {
+      content = '${content.substring(0, offset - 1)}�';
+      right = '�${right.substring(1)}';
+    }
     return ContentString(right);
   }
 

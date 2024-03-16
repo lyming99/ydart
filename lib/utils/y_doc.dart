@@ -47,7 +47,6 @@ class YDocOptions {
     if (meta != null) {
       dict['meta'] = meta;
     }
-
     encoder.writeAny(dict);
   }
 
@@ -95,6 +94,8 @@ class YDoc {
 
   Map<String, String>? get meta => _opts.meta;
 
+  bool get autoLoad => _opts.autoLoad;
+
   static int generateNewClientId() {
     return Random().nextInt(0x7FFFFFFF);
   }
@@ -111,7 +112,6 @@ class YDoc {
       }
       invokeOnBeforeTransaction(transaction!);
     }
-
     try {
       fun(transaction!);
     } finally {

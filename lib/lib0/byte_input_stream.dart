@@ -87,17 +87,21 @@ class ByteArrayInputStream {
 }
 
 extension StreamDecodingExtensions on ByteArrayInputStream {
+
+  int readUint8() => buf[pos++];
+
   int readUint16() {
     return (readByte() + (readByte() << 8));
   }
 
   int readUint32() {
     return ((readByte() +
-            (readByte() << 8) +
-            (readByte() << 16) +
-            (readByte() << 24)) >>
+        (readByte() << 8) +
+        (readByte() << 16) +
+        (readByte() << 24)) >>
         0);
   }
+
 
   int readVarUint() {
     int num = 0;
@@ -148,10 +152,9 @@ extension StreamDecodingExtensions on ByteArrayInputStream {
     if (remainingLen == 0) {
       return '';
     }
-
-    List<int> data = readNBytes(remainingLen);
-    String str = utf8.decode(data);
-    return str;
+    Uint8List data = readNBytes(remainingLen);
+    var str = String.fromCharCodes(data);
+    return Uri.decodeComponent(str);
   }
 
   Uint8List readVarUint8Array() {
@@ -174,12 +177,12 @@ extension StreamDecodingExtensions on ByteArrayInputStream {
       case 121:
         return false;
       case 123:
-        // Float64
+      // Float64
         var dBytes = readNBytes(8);
         ByteData byteData = ByteData.sublistView(dBytes);
         return byteData.getFloat64(0, Endian.host);
       case 124:
-        // Float32
+      // Float32
         var fBytes = readNBytes(4);
         ByteData byteData = ByteData.sublistView(fBytes);
         return byteData.getFloat32(0, Endian.host);

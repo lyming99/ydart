@@ -119,12 +119,11 @@ class DeleteSet {
       for (int di = deleteItems.length - 1; di >= 0; di--) {
         var deleteItem = deleteItems[di];
         var endDeleteItemClock = deleteItem.clock + deleteItem.length;
-
-        for (int si = StructStore.findIndexSS(structs, deleteItem.clock);
-            si < structs.length;
+        for (var si = StructStore.findIndexSS(structs, deleteItem.clock);
+            si < structs.length && structs[si].id.clock < endDeleteItemClock;
             si++) {
           var str = structs[si];
-          if (str.id.clock >= endDeleteItemClock) {
+          if (deleteItem.clock + deleteItem.length <= str.id.clock) {
             break;
           }
           if (str is Item && str.deleted && !str.keep && gcFilter(str)) {
@@ -231,7 +230,7 @@ class DeleteSet {
 
       for (int i = 0; i < len; i++) {
         var item = dsItems[i];
-        if(item.length==0){
+        if (item.length == 0) {
           continue;
         }
         encoder.writeDsClock(item.clock);

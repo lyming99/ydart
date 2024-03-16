@@ -242,29 +242,24 @@ class YArrayBase extends AbstractType {
     if (length == 0) {
       return;
     }
-
     int startIndex = index;
     int startLength = length;
     var marker = findMarker(index);
     var n = start;
-
     if (marker != null) {
       n = marker.p;
       index -= marker.index;
     }
-
     // Compute the first item to be deleted.
-    for (; n != null && index > 0; n = n.right as Item) {
+    for (; n != null && index > 0; n = n.right as Item?) {
       if (!n.deleted && n.countable) {
         if (index < n.length) {
           transaction.doc.store.getItemCleanStart(
               transaction, ID(client: n.id.client, clock: n.id.clock + index));
         }
-
         index -= n.length;
       }
     }
-
     // Delete all items until done.
     while (length > 0 && n != null) {
       if (!n.deleted) {
@@ -272,18 +267,14 @@ class YArrayBase extends AbstractType {
           transaction.doc.store.getItemCleanStart(
               transaction, ID(client: n.id.client, clock: n.id.clock + length));
         }
-
         n.delete(transaction);
         length -= n.length;
       }
-
       n = n.right as Item?;
     }
-
     if (length > 0) {
       throw Exception("Array length exceeded");
     }
-
     if (searchMarkers.length > 0) {
       searchMarkers.updateMarkerChanges(startIndex, -startLength + length);
     }

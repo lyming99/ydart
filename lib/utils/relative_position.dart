@@ -43,7 +43,8 @@ class RelativePosition {
       if (!tempItem.deleted && tempItem.countable) {
         if (tempItem.length > index) {
           return RelativePosition.fromTypeItem(
-              type, ID.create(tempItem.id.client, tempItem.id.clock), assoc);
+              type, ID.create(tempItem.id.client, tempItem.id.clock + index),
+              assoc);
         }
         index -= tempItem.length;
       }

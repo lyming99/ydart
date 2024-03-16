@@ -14,7 +14,7 @@ class StringDecoder implements IDecoder<String> {
 
   StringDecoder(ByteArrayInputStream input, [bool leaveOpen = false]) {
     _lengthDecoder = UintOptRleDecoder(input, leaveOpen: leaveOpen);
-    _value = Uri.decodeComponent(input.readVarString());
+    _value =  input.readVarString();
   }
 
   void dispose() {
@@ -28,14 +28,11 @@ class StringDecoder implements IDecoder<String> {
     if (length == 0) {
       return '';
     }
-
     var result = _value.substring(_pos, _pos + length);
     _pos += length;
-
     if (_pos >= _value.length) {
       _value = "";
     }
-
     return result;
   }
 

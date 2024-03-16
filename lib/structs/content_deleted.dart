@@ -21,7 +21,7 @@ class ContentDeleted extends IContentEx {
 
   @override
   List<Object?> getContent() {
-    throw UnimplementedError();
+    return [];
   }
 
   @override
