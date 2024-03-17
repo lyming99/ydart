@@ -27,7 +27,7 @@ class DSDecoderV2 extends IDSDecoder {
 
   @override
   int readDsClock() {
-    _dsCurVal += reader.readVarUint()!;
+    _dsCurVal += reader.readVarUint();
     assert(_dsCurVal >= 0);
     return _dsCurVal;
   }

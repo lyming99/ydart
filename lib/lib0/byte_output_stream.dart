@@ -16,8 +16,8 @@ class ByteArrayOutputStream {
     int oldCapacity = _buf.length;
     int minGrowth = minCapacity - oldCapacity;
     if (minGrowth > 0) {
-      _buf = Uint8List.fromList(List<int>.filled(minCapacity, 0, growable: true)
-        ..setRange(0, oldCapacity, _buf));
+      _buf = Uint8List(minCapacity*2);
+      _buf.setRange(0, oldCapacity, _buf);
     }
   }
 

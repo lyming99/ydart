@@ -88,7 +88,7 @@ class YEvent {
 
         void packOp() {
           if (lastOp != null) {
-            delta.add(lastOp!);
+            delta.add(lastOp);
           }
         }
 
@@ -97,7 +97,7 @@ class YEvent {
             item = item.right as Item?) {
           if (item.deleted) {
             if (deletes(item) && !adds(item)) {
-              if (lastOp == null || lastOp!.delete == null) {
+              if (lastOp == null || lastOp.delete == null) {
                 packOp();
                 lastOp = Delta()..delete = 0;
               }

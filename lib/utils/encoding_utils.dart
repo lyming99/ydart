@@ -98,10 +98,10 @@ class EncodingUtils {
     var sortedClients = sm.keys.toList()
       ..sort((a, b) => b.compareTo(a));
 
-    sortedClients.forEach((client) {
+    for (var client in sortedClients) {
       writeStructs(
           encoder, store.clients[client]!, client, sm[client]!);
-    });
+    }
   }
 
   static Map<int, List<AbstractStruct>> readClientStructRefs(
