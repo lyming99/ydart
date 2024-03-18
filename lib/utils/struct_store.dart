@@ -1,5 +1,3 @@
-import 'dart:collection';
-
 import 'package:ydart/lib0/byte_input_stream.dart';
 import 'package:ydart/lib0/byte_output_stream.dart';
 import 'package:ydart/utils/queue_stack.dart';
@@ -269,30 +267,26 @@ class StructStore {
           if (state < clockEnd) {
             unappliedDs.add(client, state, clockEnd - state);
           }
-
-          var index = findIndexSS(clients[client]!, clock);
-
-          var str = structs[index];
-
-          if (!str.deleted && str.id.clock < clock) {
-            var splitItem = (str as Item)
-                .splitItem(transaction, (clock - str.id.clock).toInt());
+          var index = findIndexSS(structs, clock);
+          var struct = structs[index];
+          if (!struct.deleted && struct.id.clock < clock) {
+            var splitItem = (struct as Item)
+                .splitItem(transaction, clock - struct.id.clock);
             structs.insert(index + 1, splitItem);
             index++;
           }
-
           while (index < structs.length) {
-            str = structs[index++];
-            if (str.id.clock >= clockEnd) {
+            struct = structs[index++];
+            if (struct.id.clock >= clockEnd) {
               break;
             }
-            if (!str.deleted) {
-              if (clockEnd < str.id.clock + str.length) {
-                var splitItem = (str as Item)
-                    .splitItem(transaction, (clockEnd - str.id.clock).toInt());
+            if (!struct.deleted) {
+              if (clockEnd < struct.id.clock + struct.length) {
+                var splitItem = (struct as Item).splitItem(
+                    transaction, clockEnd - struct.id.clock);
                 structs.insert(index, splitItem);
               }
-              str.delete(transaction);
+              struct.delete(transaction);
             }
           }
         } else {

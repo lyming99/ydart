@@ -9,7 +9,6 @@ import 'package:ydart/structs/content_type.dart';
 import 'package:ydart/types/y_array.dart';
 import 'package:ydart/types/y_map.dart';
 import 'package:ydart/types/y_text.dart';
-import 'package:ydart/utils/encoding.dart';
 import 'package:ydart/utils/id.dart';
 import 'package:ydart/utils/snapshot.dart';
 import 'package:ydart/utils/transaction.dart';
@@ -18,7 +17,6 @@ import 'package:ydart/utils/y_doc.dart';
 import 'package:ydart/utils/y_event.dart';
 
 import '../structs/item.dart';
-import '../utils/update_decoder.dart';
 
 typedef EventHandler<T> = Function(Object object, T callback);
 
@@ -46,6 +44,7 @@ class AbstractType {
   Item? item;
   Item? start;
   Map<String, Item> map = {};
+  Map<String, Object> holder = {};
   EventHandler<YEventArgs>? eventHandler;
   EventHandler<YDeepEventArgs>? deepEventHandler;
   YDoc? doc;

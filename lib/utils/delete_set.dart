@@ -12,8 +12,8 @@ import 'update_decoder.dart';
 import 'update_encoder.dart';
 
 class DeleteItem {
-  final int clock;
-  final int length;
+  int clock;
+  int length;
 
   DeleteItem(this.clock, this.length);
 }
@@ -82,29 +82,24 @@ class DeleteSet {
   }
 
   void sortAndMergeDeleteSet() {
-    clients.forEach((client, dels) {
-      dels.sort((a, b) => a.clock.compareTo(b.clock));
+    clients.forEach((client, deleteSets) {
+      deleteSets.sort((a, b) => a.clock - b.clock);
       var i = 1;
       var j = 1;
-      for (; i < dels.length; i++) {
-        var left = dels[j - 1];
-        var right = dels[i];
-
-        if (left.clock + left.length == right.clock) {
-          left = DeleteItem(left.clock, left.length + right.length);
-          dels[j - 1] = left;
+      for (; i < deleteSets.length; i++) {
+        var left = deleteSets[j - 1];
+        var right = deleteSets[i];
+        if (left.clock + left.length >= right.clock) {
+          left.length =
+              max(left.length, right.clock + right.length - left.clock);
         } else {
           if (j < i) {
-            dels[j] = right;
+            deleteSets[j] = right;
           }
-
           j++;
         }
       }
-
-      if (j < dels.length) {
-        dels.removeRange(j, dels.length);
-      }
+      deleteSets.length = j;
     });
   }
 

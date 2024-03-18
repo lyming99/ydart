@@ -6,7 +6,6 @@ import 'package:ydart/utils/update_decoder.dart';
 import 'package:ydart/utils/y_event.dart';
 
 import '../structs/item.dart';
-import '../utils/encoding.dart';
 import '../utils/transaction.dart';
 import '../utils/update_encoder.dart';
 import '../utils/y_doc.dart';
@@ -15,10 +14,8 @@ import 'abstract_type.dart';
 const yArrayRefId = 0;
 
 class YArrayEvent extends YEvent {
-  YArrayEvent(
-    super.target,
-    super.transaction,
-  );
+  YArrayEvent(super.target,
+      super.transaction,);
 }
 
 class YArray extends YArrayBase {
