@@ -44,7 +44,7 @@ class AbstractType {
   Item? item;
   Item? start;
   Map<String, Item> map = {};
-  Map<String, Object> holder = {};
+  Map<Object, Object> holder = {};
   EventHandler<YEventArgs>? eventHandler;
   EventHandler<YDeepEventArgs>? deepEventHandler;
   YDoc? doc;
