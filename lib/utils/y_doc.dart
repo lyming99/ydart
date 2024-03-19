@@ -216,20 +216,20 @@ class YDoc {
     EncodingUtils.writeStateVector(encoder, store.getStateVector());
   }
 
-  List<Function(Transaction transaction)> beforeObserverCalls = [];
+  Map<Object,Function(Transaction transaction)> beforeObserverCalls = {};
 
-  List<Function(Transaction transaction)> beforeTransaction = [];
+  Map<Object,Function(Transaction transaction)> beforeTransaction = {};
 
-  List<Function(Transaction transaction)> afterTransaction = [];
+  Map<Object,Function(Transaction transaction)> afterTransaction = {};
 
-  List<Function(Transaction transaction)> afterTransactionCleanup = [];
+  Map<Object,Function(Transaction transaction)> afterTransactionCleanup = {};
 
-  List<Function()> beforeAllTransactions = [];
+  Map<Object,Function()> beforeAllTransactions = {};
 
-  List<Function(List<Transaction> transactions)> afterAllTransactions = [];
+  Map<Object,Function(List<Transaction> transactions)> afterAllTransactions = {};
 
-  List<Function(Uint8List data, Object? origin, Transaction transaction)>
-      updateV2 = [];
+  Map<Object,Function(Uint8List data, Object? origin, Transaction transaction)>
+      updateV2 = {};
 
   List<Function()> destroyed = [];
 
@@ -244,37 +244,37 @@ class YDoc {
   }
 
   void invokeOnBeforeObserverCalls(Transaction transaction) {
-    for (var element in beforeObserverCalls) {
+    for (var element in beforeObserverCalls.values) {
       element.call(transaction);
     }
   }
 
   void invokeAfterAllTransactions(List<Transaction> transactions) {
-    for (var element in afterAllTransactions) {
+    for (var element in afterAllTransactions.values) {
       element.call(transactions);
     }
   }
 
   void invokeOnBeforeTransaction(Transaction transaction) {
-    for (var element in beforeTransaction) {
+    for (var element in beforeTransaction.values) {
       element.call(transaction);
     }
   }
 
   void invokeOnAfterTransaction(Transaction transaction) {
-    for (var element in afterTransaction) {
+    for (var element in afterTransaction.values) {
       element.call(transaction);
     }
   }
 
   void invokeOnAfterTransactionCleanup(Transaction transaction) {
-    for (var element in afterTransactionCleanup) {
+    for (var element in afterTransactionCleanup.values) {
       element.call(transaction);
     }
   }
 
   void invokeBeforeAllTransactions() {
-    for (var element in beforeAllTransactions) {
+    for (var element in beforeAllTransactions.values) {
       element.call();
     }
   }
@@ -292,7 +292,7 @@ class YDoc {
       var hasContent = transaction.writeUpdateMessageFromTransaction(encoder);
       if (hasContent) {
         var array = encoder.toArray();
-        for (var element in handler) {
+        for (var element in handler.values) {
           element.call(array, transaction.origin, transaction);
         }
       }

@@ -84,7 +84,7 @@ class UndoManager {
     _doc = typeScopes[0].doc!;
     _lastChange = DateTime.fromMillisecondsSinceEpoch(0);
     _captureTimeout = captureTimeout;
-    _doc.afterTransaction.add(afterTransactionHandler);
+    _doc.afterTransaction[UndoManager] = (afterTransactionHandler);
   }
 
   bool captureTransaction(Transaction transaction) {
@@ -283,10 +283,10 @@ class UndoManager {
           return true;
         });
         for (var struct in itemsToRedo) {
-          performedChange = transaction.redoItem(
-                      struct, itemsToRedo, stackItem.insertions) !=
-                  null ||
-              performedChange;
+          performedChange =
+              transaction.redoItem(struct, itemsToRedo, stackItem.insertions) !=
+                      null ||
+                  performedChange;
         }
         for (var i = itemsToDelete.length - 1; i >= 0; i--) {
           var item = itemsToDelete[i];
