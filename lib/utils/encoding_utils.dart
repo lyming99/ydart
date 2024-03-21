@@ -4,7 +4,6 @@ import 'package:ydart/lib0/byte_input_stream.dart';
 import 'package:ydart/types/abstract_type.dart';
 import 'package:ydart/utils/struct_store.dart';
 import 'package:ydart/utils/transaction.dart';
-import 'package:ydart/utils/update_encoder_v2.dart';
 
 import '../lib0/constans.dart';
 import '../structs/abstract_struct.dart';
@@ -58,7 +57,7 @@ class EncodingUtils {
       IUpdateDecoder decoder, Transaction transaction, StructStore store) {
     var clientStructRefs = readClientStructRefs(decoder, transaction.doc);
     store.mergeReadStructsIntoPendingReads(clientStructRefs);
-    store.integrateStructs(transaction);
+    store.integrateStructs1(transaction);
     store.cleanupPendingStructs();
     store.tryResumePendingDeleteReaders(transaction);
   }
@@ -95,12 +94,10 @@ class EncodingUtils {
 
     encoder.restWriter.writeVarUint(sm.length.toUnsigned(32));
 
-    var sortedClients = sm.keys.toList()
-      ..sort((a, b) => b.compareTo(a));
+    var sortedClients = sm.keys.toList()..sort((a, b) => b.compareTo(a));
 
     for (var client in sortedClients) {
-      writeStructs(
-          encoder, store.clients[client]!, client, sm[client]!);
+      writeStructs(encoder, store.clients[client]!, client, sm[client]!);
     }
   }
 
@@ -181,6 +178,9 @@ class EncodingUtils {
   }
 
   static Map<int, int> decodeStateVector(Uint8List input) {
+    if (input.isEmpty) {
+      return {};
+    }
     return readStateVector(DSDecoderV2(ByteArrayInputStream(input)));
   }
 }

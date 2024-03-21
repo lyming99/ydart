@@ -10,3 +10,4 @@ export 'utils/y_event.dart';
 export 'utils/snapshot.dart';
 export 'utils/relative_position.dart';
 export 'utils/absolute_position.dart';
+export 'utils/fragment_utils.dart';

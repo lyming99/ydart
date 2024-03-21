@@ -1,5 +1,6 @@
 import 'package:ydart/lib0/byte_input_stream.dart';
 import 'package:ydart/lib0/byte_output_stream.dart';
+import 'package:ydart/structs/skip.dart';
 import 'package:ydart/utils/queue_stack.dart';
 
 import '../structs/abstract_struct.dart';
@@ -13,7 +14,7 @@ import 'update_decoder_v2.dart';
 import 'update_encoder_v2.dart';
 
 class PendingClientStructRef {
-  int nextReadOperation = 0;
+  int i = 0;
   List<AbstractStruct> refs = [];
 }
 
@@ -84,11 +85,11 @@ class StructStore {
       var client = entry.key;
       var refs = entry.value;
 
-      if (refs.nextReadOperation == refs.refs.length) {
+      if (refs.i == refs.refs.length) {
         clientsToRemove.add(client);
       } else {
-        refs.refs.removeRange(0, refs.nextReadOperation);
-        refs.nextReadOperation = 0;
+        refs.refs.removeRange(0, refs.i);
+        refs.i = 0;
       }
     }
 
@@ -282,8 +283,8 @@ class StructStore {
             }
             if (!struct.deleted) {
               if (clockEnd < struct.id.clock + struct.length) {
-                var splitItem = (struct as Item).splitItem(
-                    transaction, clockEnd - struct.id.clock);
+                var splitItem = (struct as Item)
+                    .splitItem(transaction, clockEnd - struct.id.clock);
                 structs.insert(index, splitItem);
               }
               struct.delete(transaction);
@@ -318,22 +319,110 @@ class StructStore {
         pendingClientStructRefs[client] = PendingClientStructRef()
           ..refs = structRefs;
       } else {
-        if (pendingClientStructRefs[client]!.nextReadOperation > 0) {
-          pendingClientStructRefs[client]!.refs.removeRange(
-              0, pendingClientStructRefs[client]!.nextReadOperation);
+        var pendingStructRefs = pendingClientStructRefs[client]!;
+        if (pendingStructRefs.i > 0) {
+          pendingStructRefs.refs.removeRange(0, pendingStructRefs.i);
         }
 
-        var merged = pendingClientStructRefs[client]!.refs;
+        var merged = pendingStructRefs.refs;
         for (var i = 0; i < structRefs.length; i++) {
           merged.add(structRefs[i]);
         }
 
         merged.sort((a, b) => a.id.clock.compareTo(b.id.clock));
 
-        pendingClientStructRefs[client]!.nextReadOperation = 0;
-        pendingClientStructRefs[client]!.refs = merged;
+        pendingStructRefs.i = 0;
+        pendingStructRefs.refs = merged;
       }
     }
+  }
+
+  void integrateStructs1(Transaction transaction) {
+    var stack = _pendingStack;
+    var clientsStructRefs = _pendingClientStructRefs;
+    if (clientsStructRefs.isEmpty) {
+      return;
+    }
+
+    var clientsStructRefsIds = clientsStructRefs.keys.toList();
+    clientsStructRefsIds.sort();
+
+    PendingClientStructRef? getNextStructTarget() {
+      if (clientsStructRefsIds.isEmpty) {
+        return null;
+      }
+      var nextStructsTarget = clientsStructRefs[clientsStructRefsIds.last];
+      while (nextStructsTarget!.refs.length == nextStructsTarget.i) {
+        clientsStructRefsIds.removeLast();
+        if (clientsStructRefsIds.isNotEmpty) {
+          nextStructsTarget = clientsStructRefs[clientsStructRefsIds.last];
+        } else {
+          _pendingClientStructRefs.clear();
+          return null;
+        }
+      }
+      return nextStructsTarget;
+    }
+
+    var curStructsTarget = getNextStructTarget();
+    if (curStructsTarget == null) {
+      return;
+    }
+    var missingSV = <int, int>{};
+    void updateMissingSv(client, clock) {
+      var mclock = missingSV[client];
+      if (mclock == null || mclock > clock) {
+        missingSV[client] = clock;
+      }
+    }
+
+    var stackHead = stack.isNotEmpty
+        ? stack.pop()
+        : curStructsTarget.refs[curStructsTarget.i++];
+    var state = <int, int>{};
+
+    while (true) {
+      if (stackHead is! Skip) {
+        var localClock = state.putIfAbsent(
+            stackHead.id.client, () => getState(stackHead.id.client));
+        var offset = localClock - stackHead.id.clock;
+        if (offset < 0) {
+          stack.push(stackHead);
+          updateMissingSv(stackHead.id.client, stackHead.id.clock - 1);
+        } else {
+          var missing = stackHead.getMissing(transaction, this);
+          if (missing != null) {
+            stack.push(stackHead);
+            var structRefs =
+                clientsStructRefs[missing] ?? PendingClientStructRef();
+            if (structRefs.refs.length == structRefs.i) {
+              updateMissingSv(missing, getState(missing));
+            } else {
+              stackHead = structRefs.refs[structRefs.i++];
+              continue;
+            }
+          } else if (offset == 0 || offset < stackHead.length) {
+            stackHead.integrate(transaction, offset);
+            state[stackHead.id.client] = stackHead.id.clock + stackHead.length;
+          }
+        }
+      }
+      if (stack.isNotEmpty) {
+        stackHead = stack.pop();
+      } else if (curStructsTarget != null &&
+          curStructsTarget.i < curStructsTarget.refs.length) {
+        stackHead = curStructsTarget.refs[curStructsTarget.i++];
+      } else {
+        curStructsTarget = getNextStructTarget();
+        if (curStructsTarget == null) {
+          break;
+        } else {
+          stackHead = curStructsTarget.refs[curStructsTarget.i++];
+        }
+      }
+    }
+
+    _pendingClientStructRefs.clear();
   }
 
   void integrateStructs(Transaction transaction) {
@@ -347,9 +436,11 @@ class StructStore {
     clientsStructRefsIds.sort();
 
     PendingClientStructRef? getNextStructTarget() {
+      if (clientsStructRefsIds.isEmpty) {
+        return null;
+      }
       var nextStructsTarget = clientsStructRefs[clientsStructRefsIds.last];
-      while (nextStructsTarget!.refs.length ==
-          nextStructsTarget.nextReadOperation) {
+      while (nextStructsTarget!.refs.length == nextStructsTarget.i) {
         clientsStructRefsIds.removeLast();
         if (clientsStructRefsIds.isNotEmpty) {
           nextStructsTarget = clientsStructRefs[clientsStructRefsIds.last];
@@ -368,7 +459,7 @@ class StructStore {
 
     var stackHead = stack.isNotEmpty
         ? stack.pop()
-        : curStructsTarget.refs[curStructsTarget.nextReadOperation++];
+        : curStructsTarget.refs[curStructsTarget.i++];
     var state = <int, int>{};
 
     while (true) {
@@ -385,22 +476,22 @@ class StructStore {
         }
 
         if (clientsStructRefs[stackHead.id.client]!.refs.length !=
-            clientsStructRefs[stackHead.id.client]!.nextReadOperation) {
+            clientsStructRefs[stackHead.id.client]!.i) {
           var r = clientsStructRefs[stackHead.id.client]!
-              .refs[clientsStructRefs[stackHead.id.client]!.nextReadOperation];
+              .refs[clientsStructRefs[stackHead.id.client]!.i];
           if (r.id.clock < stackHead.id.clock) {
-            clientsStructRefs[stackHead.id.client]!.refs[
-                    clientsStructRefs[stackHead.id.client]!.nextReadOperation] =
-                stackHead;
+            clientsStructRefs[stackHead.id.client]!
+                .refs[clientsStructRefs[stackHead.id.client]!.i] = stackHead;
             stackHead = r;
 
-            clientsStructRefs[stackHead.id.client]!.refs.removeRange(
-                0, clientsStructRefs[stackHead.id.client]!.nextReadOperation);
+            clientsStructRefs[stackHead.id.client]!
+                .refs
+                .removeRange(0, clientsStructRefs[stackHead.id.client]!.i);
             clientsStructRefs[stackHead.id.client]!
                 .refs
                 .sort((a, b) => a.id.clock.compareTo(b.id.clock));
 
-            clientsStructRefs[stackHead.id.client]!.nextReadOperation = 0;
+            clientsStructRefs[stackHead.id.client]!.i = 0;
             continue;
           }
         }
@@ -419,16 +510,14 @@ class StructStore {
         if (stack.isNotEmpty) {
           stackHead = stack.pop();
         } else if (curStructsTarget != null &&
-            curStructsTarget.nextReadOperation < curStructsTarget.refs.length) {
-          stackHead =
-              curStructsTarget.refs[curStructsTarget.nextReadOperation++];
+            curStructsTarget.i < curStructsTarget.refs.length) {
+          stackHead = curStructsTarget.refs[curStructsTarget.i++];
         } else {
           curStructsTarget = getNextStructTarget();
           if (curStructsTarget == null) {
             break;
           } else {
-            stackHead =
-                curStructsTarget.refs[curStructsTarget.nextReadOperation++];
+            stackHead = curStructsTarget.refs[curStructsTarget.i++];
           }
         }
       } else {
@@ -437,14 +526,14 @@ class StructStore {
         }
 
         if (clientsStructRefs[missing]!.refs.length ==
-            clientsStructRefs[missing]!.nextReadOperation) {
+            clientsStructRefs[missing]!.i) {
           stack.push(stackHead);
           return;
         }
 
         stack.push(stackHead);
-        stackHead = clientsStructRefs[missing]!
-            .refs[clientsStructRefs[missing]!.nextReadOperation++];
+        stackHead =
+            clientsStructRefs[missing]!.refs[clientsStructRefs[missing]!.i++];
       }
     }
 
