@@ -18,6 +18,7 @@ class FragmentData {
   int index = 0;
   int offset;
   int endOffset;
+  int time;
   Uint8List vector;
   Uint8List content;
   bool isMaxFragment;
@@ -28,12 +29,14 @@ class FragmentData {
     required this.vector,
     required this.content,
     required this.isMaxFragment,
+    required this.time,
   });
 
   int get length => endOffset - offset;
 
   Uint8List toByteArray(bool isEndFlag) {
     var output = ByteArrayOutputStream(1024);
+    output.writeUint64(time);
     output.writeUint32(vector.length);
     output.writeBytes(vector);
     output.writeUint32(content.length);
@@ -56,7 +59,9 @@ class FragmentDocFile {
   });
 
   void loadDoc(Uint8List docBytes) {
+    this.doc?.updateV2.remove("WriteHandler");
     var doc = YDoc();
+    doc.applyUpdateV2(docBytes);
     this.doc = doc;
     var vector = doc.encodeStateVectorV2();
     var fragment = FragmentData(
@@ -65,8 +70,10 @@ class FragmentDocFile {
       vector: vector,
       content: docBytes,
       isMaxFragment: true,
+      time: DateTime.now().millisecondsSinceEpoch,
     );
     fragments.add(fragment);
+    doc.updateV2["WriteFragment"] = _writeFragment;
   }
 
   Future<YDoc> readFragmentDoc() async {
@@ -101,11 +108,13 @@ class FragmentDocFile {
     var currentMaxFragment = _findOrCreateMaxFragment(doc, vector);
     var maxFragmentBytes = currentMaxFragment.toByteArray(false);
     var currentFragment = FragmentData(
-        offset: currentMaxFragment.endOffset,
-        endOffset: 0,
-        vector: vector,
-        content: data,
-        isMaxFragment: false);
+      offset: currentMaxFragment.endOffset,
+      endOffset: 0,
+      vector: vector,
+      content: data,
+      isMaxFragment: false,
+      time: DateTime.now().millisecondsSinceEpoch,
+    );
     fragments.add(currentFragment);
     var writer = File(path).openSync(mode: FileMode.append);
     writer.setPositionSync(max(0, currentMaxFragment.offset - 4));
@@ -135,11 +144,13 @@ class FragmentDocFile {
     if (currentMaxFragment == null) {
       var content = doc.encodeStateAsUpdateV2();
       currentMaxFragment = FragmentData(
-          offset: 0,
-          endOffset: 0,
-          vector: vector,
-          content: content,
-          isMaxFragment: true);
+        offset: 0,
+        endOffset: 0,
+        vector: vector,
+        content: content,
+        isMaxFragment: true,
+        time: DateTime.now().millisecondsSinceEpoch,
+      );
       fragments.insert(0, currentMaxFragment);
     } else {
       if (currentMaxFragment.length > kMaxFragmentLength) {
@@ -151,6 +162,7 @@ class FragmentDocFile {
           vector: vector,
           content: content,
           isMaxFragment: true,
+          time: DateTime.now().millisecondsSinceEpoch,
         )..index = currentMaxFragment.index + 1;
         fragments.insert(maxFragment.index, maxFragment);
         currentMaxFragment = maxFragment;
@@ -190,6 +202,7 @@ class FragmentDocFile {
     while (input.available() > 0) {
       try {
         var offset = input.pos;
+        var time = input.readUint64();
         var vector = _readVector(input);
         var content = _readContent(input);
         var flag = input.readUint32();
@@ -199,11 +212,13 @@ class FragmentDocFile {
           break;
         }
         fragments.add(FragmentData(
-            offset: offset,
-            vector: vector,
-            content: content,
-            endOffset: input.pos,
-            isMaxFragment: flag == kMaxFragmentFlag));
+          offset: offset,
+          vector: vector,
+          content: content,
+          endOffset: input.pos,
+          isMaxFragment: flag == kMaxFragmentFlag,
+          time: time,
+        ));
         doc!.applyUpdateV2(content);
         if (flag == kEndFlag) {
           break;

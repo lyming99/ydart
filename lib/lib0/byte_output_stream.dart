@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 class ByteArrayOutputStream {
@@ -16,7 +15,7 @@ class ByteArrayOutputStream {
     int oldCapacity = _buf.length;
     int minGrowth = minCapacity - oldCapacity;
     if (minGrowth > 0) {
-      var newBuf = Uint8List(minCapacity*2);
+      var newBuf = Uint8List(minCapacity * 2);
       newBuf.setRange(0, oldCapacity, _buf);
       _buf = newBuf;
     }
@@ -71,6 +70,13 @@ class ByteArrayOutputStream {
     }
   }
 
+  void writeUint64(int num) {
+    for (int i = 0; i < 8; i++) {
+      write(num & 0xFF);
+      num >>= 8;
+    }
+  }
+
   void writeVarUint(int num) {
     while (num > 0x7F) {
       write(0x80 | (num & 0x7F));
@@ -97,7 +103,7 @@ class ByteArrayOutputStream {
   void writeVarString(String str) {
     var value = Uri.encodeComponent(str);
     writeVarUint(value.length);
-    for(var i=0;i<value.length;i++){
+    for (var i = 0; i < value.length; i++) {
       write(value.codeUnitAt(i));
     }
   }
