@@ -2,7 +2,7 @@
 
 import 'package:ydart/lib0/byte_output_stream.dart';
 
-import 'IEncoder.dart';
+import 'iencoder.dart';
 
 abstract class AbstractStreamEncoder<T> implements IEncoder<T> {
     late ByteArrayOutputStream stream;
