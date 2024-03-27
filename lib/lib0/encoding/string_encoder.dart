@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:ydart/lib0/byte_output_stream.dart';
 
-import 'IEncoder.dart';
+import 'iencoder.dart';
 import 'uint_opt_rle_encoder.dart';
 
 class StringEncoder implements IEncoder<String> {
