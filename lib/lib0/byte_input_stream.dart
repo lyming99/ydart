@@ -163,7 +163,12 @@ extension StreamDecodingExtensions on ByteArrayInputStream {
     }
     Uint8List data = readNBytes(remainingLen);
     var str = String.fromCharCodes(data);
-    return Uri.decodeComponent(str);
+    try {
+      return Uri.decodeComponent(str);
+    } catch (e) {
+      print(e);
+      throw e;
+    }
   }
 
   Uint8List readVarUint8Array() {

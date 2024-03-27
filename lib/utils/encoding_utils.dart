@@ -57,7 +57,7 @@ class EncodingUtils {
       IUpdateDecoder decoder, Transaction transaction, StructStore store) {
     var clientStructRefs = readClientStructRefs(decoder, transaction.doc);
     store.mergeReadStructsIntoPendingReads(clientStructRefs);
-    store.integrateStructs1(transaction);
+    store.integrateStructs(transaction);
     store.cleanupPendingStructs();
     store.tryResumePendingDeleteReaders(transaction);
   }
