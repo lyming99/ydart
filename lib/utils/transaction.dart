@@ -74,8 +74,9 @@ class Transaction {
         actions.add(() {
           doc.invokeOnBeforeObserverCalls(transaction);
         });
-        transaction.changed.forEach((itemType, subs) {
-          actions.add(() {
+
+        actions.add(() {
+          transaction.changed.forEach((itemType, subs) {
             if (itemType.item == null || !itemType.item!.deleted) {
               itemType.callObserver(transaction, subs);
             }
@@ -88,21 +89,25 @@ class Transaction {
               for (var evt in events) {
                 if (evt.target.item == null || !evt.target.item!.deleted) {
                   evt.currentTarget = type;
-                  evt.path.clear();
                 }
               }
+
               List<YEvent> sortedEvents = List.from(events);
               sortedEvents.sort((a, b) => a.path.length - b.path.length);
+
               assert(sortedEvents.isNotEmpty);
+
               actions.add(() {
                 type.callDeepEventHandlerListeners(sortedEvents, transaction);
               });
             }
           });
         });
+
         actions.add(() {
           doc.invokeOnAfterTransaction(transaction);
         });
+
         callAll(actions);
       } finally {
         if (doc.gc) {
@@ -276,7 +281,7 @@ class Transaction {
     }
 
     var meta =
-        transaction.meta['splitSnapshotAffectedStructs'] as HashSet<Snapshot>;
+    transaction.meta['splitSnapshotAffectedStructs'] as HashSet<Snapshot>;
     var store = transaction.doc.store;
 
     if (!meta.contains(snapshot)) {
@@ -294,7 +299,7 @@ class Transaction {
   bool writeUpdateMessageFromTransaction(IUpdateEncoder encoder) {
     if (deleteSet.clients.isEmpty &&
         !afterState.keys.any((client) =>
-            !beforeState.containsKey(client) ||
+        !beforeState.containsKey(client) ||
             afterState[client] != beforeState[client])) {
       return false;
     }
