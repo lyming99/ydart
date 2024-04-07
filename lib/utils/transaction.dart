@@ -48,10 +48,14 @@ class Transaction {
   void addChangedTypeToTransaction(AbstractType? type, String? parentSub) {
     var item = type?.item;
     if (item == null ||
-            item.id.clock < (beforeState[item.id.client]??0) &&
-            !item.deleted) {
-      if(type!=null&&parentSub!=null) {
-        changed.putIfAbsent(type, () => {}).add(parentSub);
+        (beforeState.containsKey(item.id.client) &&
+            item.id.clock < beforeState[item.id.client]! &&
+            !item.deleted)) {
+      if (!changed.containsKey(type)) {
+        changed[type!] = {};
+      }
+      if (parentSub != null) {
+        changed[type]!.add(parentSub);
       }
     }
   }
