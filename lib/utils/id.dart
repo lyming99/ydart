@@ -1,5 +1,3 @@
-import 'package:ydart/utils/encoding.dart';
-
 import '../lib0/byte_input_stream.dart';
 import '../lib0/byte_output_stream.dart';
 
@@ -30,6 +28,11 @@ class ID {
   void write(ByteArrayOutputStream encoder) {
     encoder.writeVarInt(client);
     encoder.writeVarInt(clock);
+  }
+
+  @override
+  String toString() {
+    return "{client:$client,clock:$clock}";
   }
 
   static ID read(ByteArrayInputStream decoder) {

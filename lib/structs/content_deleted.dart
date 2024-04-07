@@ -40,6 +40,7 @@ class ContentDeleted extends IContentEx {
   bool mergeWith(IContent right) {
     if (right is ContentDeleted) {
       length += right.length;
+      return true;
     }
     return false;
   }

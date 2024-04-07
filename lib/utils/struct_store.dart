@@ -252,18 +252,16 @@ class StructStore {
   void readAndApplyDeleteSet(IDSDecoder decoder, Transaction transaction) {
     var unappliedDs = DeleteSet(clients: {});
     var numClients = decoder.reader.readVarUint();
-
     for (int i = 0; i < numClients; i++) {
       decoder.resetDsCurVal();
-
       var client = decoder.reader.readVarUint();
       var numberOfDeletes = decoder.reader.readVarUint();
       var structs = clients[client] ?? [];
       var state = getState(client);
-
-      for (int deleteIndex = 0; deleteIndex < numberOfDeletes; deleteIndex++) {
+      for (int j = 0; j < numberOfDeletes; j++) {
         var clock = decoder.readDsClock();
-        var clockEnd = clock + decoder.readDsLength();
+        var dsLength = decoder.readDsLength();
+        var clockEnd = clock + dsLength;
         if (clock < state) {
           if (state < clockEnd) {
             unappliedDs.add(client, state, clockEnd - state);
@@ -291,7 +289,7 @@ class StructStore {
             }
           }
         } else {
-          unappliedDs.add(client, clock, clockEnd - clock);
+          unappliedDs.add(client, clock, dsLength);
         }
       }
 

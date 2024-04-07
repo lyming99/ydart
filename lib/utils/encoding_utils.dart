@@ -141,7 +141,6 @@ class EncodingUtils {
                 : null,
             readItemContent(decoder, info),
           );
-
           refs.add(str);
           clock += str.length;
         } else {

@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:io';
 
 import 'package:ydart/structs/content_embed.dart';
 import 'package:ydart/structs/content_format.dart';
@@ -13,7 +13,6 @@ import 'package:ydart/utils/y_doc.dart';
 import 'package:ydart/utils/y_event.dart';
 
 import '../structs/item.dart';
-import '../utils/encoding.dart';
 import '../utils/update_decoder.dart';
 
 const yTextRefId = 2;
@@ -263,15 +262,14 @@ class ItemTextListPosition {
     if (right == null) {
       throw Exception("unexpected");
     }
-    var rightContent = right.content;
-    if (rightContent is ContentEmbed || rightContent is ContentString) {
+    if (right.content is ContentFormat) {
+      if (!right.deleted) {
+        YText.updateCurrentAttributes(
+            currentAttributes, right.content as ContentFormat);
+      }
+    } else {
       if (!right.deleted) {
         index += right.length;
-      }
-    }
-    if (rightContent is ContentFormat) {
-      if (!right.deleted) {
-        YText.updateCurrentAttributes(currentAttributes, rightContent);
       }
     }
     left = right;
@@ -282,23 +280,18 @@ class ItemTextListPosition {
     var right = this.right;
     while (right != null && count > 0) {
       var rContent = right.content;
-      if (rContent is ContentEmbed || rContent is ContentString) {
-        if (!right.deleted) {
-          if (count < right.length) {
-            transaction.doc.store.getItemCleanStart(
-              transaction,
-              ID(
-                client: right.id.client,
-                clock: right.id.clock + count,
-              ),
-            );
-          }
-          index += right.length;
-          count -= right.length;
-        }
-      } else if (rContent is ContentFormat) {
+      if (rContent is ContentFormat) {
         if (!right.deleted) {
           YText.updateCurrentAttributes(currentAttributes, rContent);
+        }
+      } else {
+        if (!right.deleted) {
+          if (count < right.length) {
+            transaction.doc.store.getItemCleanStart(transaction,
+                ID(client: right.id.client, clock: right.id.clock + count));
+          }
+          index+=right.length;
+          count-=right.length;
         }
       }
       left = right;
@@ -350,12 +343,12 @@ class ItemTextListPosition {
         1,
       );
       left.integrate(transaction, 0);
-      if(kvp.key==null){
+      if (kvp.key == null) {
         print("null");
       }
-      if(kvp.value==null){
+      if (kvp.value == null) {
         currentAttributes.remove(kvp.key);
-      }else {
+      } else {
         currentAttributes[kvp.key] = kvp.value;
       }
       YText.updateCurrentAttributes(
@@ -528,6 +521,7 @@ class YText extends YArrayBase {
   }
 
   void insert(int index, String text, [Map<String, Object?>? attributes]) {
+    print("insert:$index text:$text");
     if (text.isEmpty) {
       return;
     }
@@ -568,8 +562,7 @@ class YText extends YArrayBase {
       return;
     }
     doc.transact((tr) {
-      var pos = findPosition(tr, index);
-      deleteText(tr, pos, length);
+      deleteText(tr, findPosition(tr, index), length);
     });
   }
 
@@ -863,7 +856,6 @@ class YText extends YArrayBase {
       }
       end = end.right as Item?;
     }
-
     int cleanups = 0;
     while (start != null && start != end) {
       if (!start.deleted) {
@@ -875,7 +867,6 @@ class YText extends YArrayBase {
           var startVal = startAttributes.containsKey(cf.key)
               ? startAttributes[cf.key]
               : null;
-
           if (endVal != cf.value ||
               !(endVal == cf.value) ||
               startVal == cf.value ||
@@ -885,7 +876,6 @@ class YText extends YArrayBase {
           }
         }
       }
-
       start = start.right as Item?;
     }
     return cleanups;
@@ -961,6 +951,7 @@ class YText extends YArrayBase {
     while (length > 0 && curPos.right != null) {
       if (!curPos.right!.deleted) {
         switch (curPos.right!.content.runtimeType) {
+          case ContentType:
           case ContentEmbed:
           case ContentString:
             if (length < curPos.right!.length) {
@@ -974,21 +965,17 @@ class YText extends YArrayBase {
             break;
         }
       }
-
       curPos.forward();
     }
-
     if (start != null) {
       cleanupFormattingGap(transaction, start, curPos.right, startAttrs,
           Map<String, Object>.from(curPos.currentAttributes));
     }
-
     var parent = (curPos.left ?? curPos.right)!.parent as YText;
     if (parent.searchMarkers.isNotEmpty) {
       parent.searchMarkers
           .updateMarkerChanges(curPos.index, -startLength + length);
     }
-
     return curPos;
   }
 
@@ -1009,6 +996,7 @@ class YText extends YArrayBase {
       attributes[format.key] = format.value;
     }
   }
+
   @override
   AbstractType internalCopy() {
     return YText();

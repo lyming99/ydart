@@ -70,7 +70,6 @@ class ArraySearchMarkerCollection {
   void updateMarkerChanges(int index, int len) {
     for (int i = searchMarkers.length - 1; i >= 0; i--) {
       var m = searchMarkers[i];
-
       if (len > 0) {
         Item? p = m.p;
         p.marker = false;
@@ -80,16 +79,13 @@ class ArraySearchMarkerCollection {
             m.index -= p.length;
           }
         }
-
         if (p == null || p.marker) {
           searchMarkers.removeAt(i);
           continue;
         }
-
         m.p = p;
         p.marker = true;
       }
-
       // A simple index <= m.Index check would actually suffice.
       if (index < m.index || (len > 0 && index == m.index)) {
         m.index = math.max(index, m.index + len);

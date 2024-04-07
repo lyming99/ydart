@@ -48,14 +48,10 @@ class Transaction {
   void addChangedTypeToTransaction(AbstractType? type, String? parentSub) {
     var item = type?.item;
     if (item == null ||
-        (beforeState.containsKey(item.id.client) &&
-            item.id.clock < beforeState[item.id.client]! &&
-            !item.deleted)) {
-      if (!changed.containsKey(type)) {
-        changed[type!] = {};
-      }
-      if (parentSub != null) {
-        changed[type]!.add(parentSub);
+            item.id.clock < (beforeState[item.id.client]??0) &&
+            !item.deleted) {
+      if(type!=null&&parentSub!=null) {
+        changed.putIfAbsent(type, () => {}).add(parentSub);
       }
     }
   }
@@ -78,9 +74,8 @@ class Transaction {
         actions.add(() {
           doc.invokeOnBeforeObserverCalls(transaction);
         });
-
-        actions.add(() {
-          transaction.changed.forEach((itemType, subs) {
+        transaction.changed.forEach((itemType, subs) {
+          actions.add(() {
             if (itemType.item == null || !itemType.item!.deleted) {
               itemType.callObserver(transaction, subs);
             }
@@ -93,25 +88,21 @@ class Transaction {
               for (var evt in events) {
                 if (evt.target.item == null || !evt.target.item!.deleted) {
                   evt.currentTarget = type;
+                  evt.path.clear();
                 }
               }
-
               List<YEvent> sortedEvents = List.from(events);
               sortedEvents.sort((a, b) => a.path.length - b.path.length);
-
               assert(sortedEvents.isNotEmpty);
-
               actions.add(() {
                 type.callDeepEventHandlerListeners(sortedEvents, transaction);
               });
             }
           });
         });
-
         actions.add(() {
           doc.invokeOnAfterTransaction(transaction);
         });
-
         callAll(actions);
       } finally {
         if (doc.gc) {

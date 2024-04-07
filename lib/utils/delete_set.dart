@@ -16,6 +16,10 @@ class DeleteItem {
   int length;
 
   DeleteItem(this.clock, this.length);
+  @override
+  String toString() {
+    return '{"clock":$clock,"length":$length}';
+  }
 }
 
 class DeleteSet {
@@ -34,10 +38,8 @@ class DeleteSet {
   }
 
   void add(int client, int clock, int length) {
-    if (!clients.containsKey(client)) {
-      clients[client] = [];
-    }
-    clients[client]!.add(DeleteItem(clock, length));
+    var arr = clients.putIfAbsent(client, () => []);
+    arr.add(DeleteItem(clock, length));
   }
 
   void iterateDeletedStructs(
