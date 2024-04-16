@@ -83,9 +83,8 @@ class ByteArrayInputStream {
   }
 
   void close() {}
-}
 
-extension StreamDecodingExtensions on ByteArrayInputStream {
+
   int readUint8() => buf[pos++];
 
   int readUint16() {
@@ -94,21 +93,21 @@ extension StreamDecodingExtensions on ByteArrayInputStream {
 
   int readUint32() {
     return ((readByte() +
-            (readByte() << 8) +
-            (readByte() << 16) +
-            (readByte() << 24)) >>
+        (readByte() << 8) +
+        (readByte() << 16) +
+        (readByte() << 24)) >>
         0);
   }
 
   int readUint64() {
     return ((readByte() +
-            (readByte() << 8) +
-            (readByte() << 16) +
-            (readByte() << 24) +
-            (readByte() << 32) +
-            (readByte() << 40) +
-            (readByte() << 48) +
-            (readByte() << 56)) >>
+        (readByte() << 8) +
+        (readByte() << 16) +
+        (readByte() << 24) +
+        (readByte() << 32) +
+        (readByte() << 40) +
+        (readByte() << 48) +
+        (readByte() << 56)) >>
         0);
   }
 
@@ -191,12 +190,12 @@ extension StreamDecodingExtensions on ByteArrayInputStream {
       case 121:
         return false;
       case 123:
-        // Float64
+      // Float64
         var dBytes = readNBytes(8);
         ByteData byteData = ByteData.sublistView(dBytes);
         return byteData.getFloat64(0, Endian.host);
       case 124:
-        // Float32
+      // Float32
         var fBytes = readNBytes(4);
         ByteData byteData = ByteData.sublistView(fBytes);
         return byteData.getFloat32(0, Endian.host);

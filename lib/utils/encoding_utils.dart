@@ -101,6 +101,71 @@ class EncodingUtils {
     }
   }
 
+  static void encrypt(IUpdateDecoder decoder, IUpdateEncoder encoder) {
+    // structs
+    var numOfStateUpdates = decoder.reader.readVarUint();
+    encoder.restWriter.writeVarUint(numOfStateUpdates);
+    for (var i = 0; i < numOfStateUpdates; i++) {
+      var numberOfStructs = decoder.reader.readVarUint();
+      encoder.restWriter.writeVarUint(numberOfStructs);
+      var client = decoder.readClient();
+      encoder.writeClient(client);
+      var clock = decoder.reader.readVarUint();
+      encoder.restWriter.writeVarUint(clock);
+      for (var j = 0; j < numberOfStructs; j++) {
+        var info = decoder.readInfo();
+        encoder.writeInfo(info);
+        if ((Bits.bits5 & info) != 0) {
+          if ((info & Bit.bit8) == Bit.bit8) {
+            encoder.writeLeftId(decoder.readLeftId());
+          }
+          if ((info & Bit.bit7) == Bit.bit7) {
+            encoder.writeRightId(decoder.readRightId());
+          }
+          var cantCopyParentInfo = (info & (Bit.bit7 | Bit.bit8)) == 0;
+          var hasParentYKey =
+              cantCopyParentInfo ? decoder.readParentInfo() : false;
+          if (cantCopyParentInfo) {
+            encoder.writeParentInfo(hasParentYKey);
+          }
+          var parentYKey =
+              cantCopyParentInfo && hasParentYKey ? decoder.readString() : null;
+          if (cantCopyParentInfo && hasParentYKey) {
+            encoder.writeString(parentYKey!);
+          }
+          if (cantCopyParentInfo && !hasParentYKey) {
+            encoder.writeLeftId(decoder.readLeftId());
+          }
+          if (cantCopyParentInfo && (info & Bit.bit6) == Bit.bit6) {
+            encoder.writeString(decoder.readString());
+          }
+          readItemContent(decoder, info).write(encoder, 0);
+        } else {
+          var length = decoder.readLength();
+          encoder.writeLength(length);
+        }
+      }
+    }
+
+    // delete set
+    var numClients = decoder.reader.readVarUint();
+    encoder.restWriter.writeVarUint(numClients);
+    for (int i = 0; i < numClients; i++) {
+      decoder.resetDsCurVal();
+      encoder.resetDsCurVal();
+      var client = decoder.reader.readVarUint();
+      encoder.restWriter.writeVarUint(client);
+      var numberOfDeletes = decoder.reader.readVarUint();
+      encoder.restWriter.writeVarUint(numberOfDeletes);
+      for (int j = 0; j < numberOfDeletes; j++) {
+        var clock = decoder.readDsClock();
+        encoder.writeDsClock(clock);
+        var dsLength = decoder.readDsLength();
+        encoder.writeDsLength(dsLength);
+      }
+    }
+  }
+
   static Map<int, List<AbstractStruct>> readClientStructRefs(
       IUpdateDecoder decoder, YDoc doc) {
     var clientRefs = <int, List<AbstractStruct>>{};
