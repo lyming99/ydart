@@ -23,9 +23,6 @@ class YArray extends YArrayBase {
   final List<Object> _prelimContent = [];
 
   @override
-  int get length => max(_prelimContent.length, super.length);
-
-  @override
   void integrate(YDoc? doc, Item? item) {
     super.integrate(doc, item);
     insert(0, _prelimContent);
