@@ -31,6 +31,10 @@ class YMap extends AbstractType {
     return tryTypeMapGet(key);
   }
 
+  Object? getPrelim(String key) {
+    return _prelimContent[key];
+  }
+
   void set(String key, Object? value) {
     var doc = this.doc;
     if (doc != null) {
